@@ -1,15 +1,16 @@
+
 <!DOCTYPE html>
 <html lang="it">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Richieste Jellyfin</title>
+    <title>Suggerimenti Catalogo</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>🎬 Richieste Catalogo Jellyfin</h1>
+            <h1>🎬 Richieste Catalogo Server</h1>
             <p>Aggiungi film o serie TV che vorresti vedere</p>
         </header>
 
@@ -30,13 +31,25 @@
                 </div>
                 
                 <div class="form-group">
+                    <label for="priority">Priorità iniziale *</label>
+                    <select id="priority" required>
+                        <option value="">Seleziona...</option>
+                        <option value="1">1 - Bassa</option>
+                        <option value="3">3</option>
+                        <option value="5">5 - Media</option>
+                        <option value="7">7</option>
+                        <option value="10">10 - Alta</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
                     <label for="requester">Il tuo nome *</label>
                     <input type="text" id="requester" required placeholder="Es: Marco">
                 </div>
                 
                 <div class="form-group">
                     <label for="notes">Note (opzionale)</label>
-                    <textarea id="notes" rows="3" placeholder="Es: Stagione 2, versione italiana..."></textarea>
+                    <textarea id="notes" rows="3" placeholder="Es: Stagione 2, versione originale..."></textarea>
                 </div>
                 
                 <button type="submit" class="btn-submit">Invia Richiesta</button>
@@ -47,6 +60,10 @@
             <div class="section-header">
                 <h2>📋 Richieste Recenti</h2>
                 <span id="requestCount" class="count-badge">0</span>
+            </div>
+            <div class="sorting-controls">
+                <button class="sort-btn active" data-sort="votes">🔥 Per Voti</button>
+                <button class="sort-btn" data-sort="date">🕒 Per Data</button>
             </div>
             <div id="requestsList" class="requests-list">
                 <div class="loading">Caricamento richieste...</div>
