@@ -12,14 +12,13 @@
         
         <form id="form">
             <select id="tipo" required>
-                <option value="">Seleziona tipo</option>
+                <option value="">Tipo</option>
                 <option value="Film">Film</option>
                 <option value="Serie TV">Serie TV</option>
             </select>
             
-            <input type="text" id="titolo" placeholder="Scrivi il titolo..." required>
-            
-            <button type="submit">Invia Suggerimento</button>
+            <input type="text" id="titolo" placeholder="Titolo..." required>
+            <button type="submit">Aggiungi</button>
         </form>
 
         <div class="tabs">
@@ -34,11 +33,10 @@
                     <th>Tipo</th>
                     <th>Titolo</th>
                     <th>Data</th>
+                    <th></th>
                 </tr>
             </thead>
-            <tbody id="tabella">
-                <tr><td colspan="3">Caricamento...</td></tr>
-            </tbody>
+            <tbody id="tabella"></tbody>
         </table>
     </div>
     
