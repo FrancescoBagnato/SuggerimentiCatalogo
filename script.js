@@ -19,21 +19,21 @@ document.getElementById('form').addEventListener('submit', async function(e) {
     
     if (!tipo || !titolo) return alert('Compila tutti i campi!');
 
-    // Invia a Google Form (inserisci URL form)
-    const formUrl = 'https://docs.google.com/forms/d/e/1FAIpQLSc.../formResponse';
+    // Invia a Google Form
+    const formUrl = 'https://docs.google.com/forms/d/e/1FAIpQLSfOiTpwkWZyeUlVgC4WZkYLdCCLTg6p-I2lW_FxXjCG3UDXMw/formResponse';
     const formData = new FormData();
-    formData.append('entry.XXXXX', tipo);  // Sostituisci XXXXX
-    formData.append('entry.YYYYY', titolo); // Sostituisci YYYYY
+    formData.append('entry.1656949296', tipo);
+    formData.append('entry.383160714', titolo);
 
     try {
         await fetch(formUrl, { method: 'POST', body: formData, mode: 'no-cors' });
-        alert('✅ Inviato!');
+        alert('✅ Suggerimento inviato!');
         this.reset();
         document.getElementById('inputFilm').classList.add('hidden');
         document.getElementById('inputSerie').classList.add('hidden');
-        setTimeout(caricaDati, 2000);
+        setTimeout(caricaDati, 3000);
     } catch(e) {
-        alert('Errore. Riprova!');
+        alert('❌ Errore invio. Riprova!');
     }
 });
 
@@ -46,13 +46,14 @@ async function caricaDati() {
         const json = JSON.parse(testo.substr(47).slice(0, -2));
         
         dati = json.table.rows.map(row => ({
-             row.c[0]?.f || '',
+             row.c[0]?.f || row.c[0]?.v || '',
             tipo: row.c[1]?.v || '',
             titolo: row.c[2]?.v || ''
-        })).filter(item => item.tipo);
+        })).filter(item => item.tipo && item.titolo);
 
         mostraTabella();
     } catch(e) {
+        console.error('Errore:', e);
         document.getElementById('tabella').innerHTML = 
             '<tr><td colspan="3" class="vuoto">Errore caricamento</td></tr>';
     }
@@ -64,11 +65,11 @@ function mostraTabella() {
     const tbody = document.getElementById('tabella');
     
     if (filtrati.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="3" class="vuoto">Nessun suggerimento</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="3" class="vuoto">Nessun suggerimento ancora</td></tr>';
         return;
     }
 
-    tbody.innerHTML = filtrati.map(item => `
+    tbody.innerHTML = filtrati.reverse().map(item => `
         <tr>
             <td><span class="badge badge-${item.tipo === 'Film' ? 'film' : 'serie'}">${item.tipo}</span></td>
             <td><strong>${item.titolo}</strong></td>
@@ -87,4 +88,4 @@ function filtra(nuovoFiltro) {
 
 // Avvio
 caricaDati();
-setInterval(caricaDati, 30000);
+setInterval(caricaDati, 20000);
