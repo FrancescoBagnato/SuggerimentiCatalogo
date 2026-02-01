@@ -1,314 +1,63 @@
 <!DOCTYPE html>
 <html lang="it">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Catalogo Jellyfin - Suggerimenti</title>
-    <style>
-      * {
-        margin: 0;
-        padding: 0;
-        box-sizing: border-box;
-      }
-      body {
-        font-family: "Segoe UI", Tahoma, sans-serif;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        min-height: 100vh;
-        padding: 20px;
-      }
-      .container {
-        max-width: 900px;
-        margin: 0 auto;
-      }
-      .header {
-        text-align: center;
-        color: white;
-        margin-bottom: 40px;
-      }
-      .header h1 {
-        font-size: 2.5em;
-        margin-bottom: 10px;
-        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
-      }
-      .header p {
-        font-size: 1.2em;
-        opacity: 0.9;
-      }
-      .card {
-        background: white;
-        border-radius: 15px;
-        padding: 30px;
-        margin-bottom: 30px;
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-      }
-      .card h2 {
-        color: #667eea;
-        margin-bottom: 20px;
-        font-size: 1.8em;
-      }
-      .form-group {
-        margin-bottom: 20px;
-      }
-      label {
-        display: block;
-        margin-bottom: 8px;
-        font-weight: 600;
-        color: #333;
-      }
-      select,
-      input {
-        width: 100%;
-        padding: 12px;
-        border: 2px solid #e0e0e0;
-        border-radius: 8px;
-        font-size: 16px;
-        transition: border 0.3s;
-      }
-      select:focus,
-      input:focus {
-        outline: none;
-        border-color: #667eea;
-      }
-      .hidden {
-        display: none;
-      }
-      button {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        padding: 15px 40px;
-        border: none;
-        border-radius: 8px;
-        font-size: 18px;
-        font-weight: 600;
-        cursor: pointer;
-        width: 100%;
-        transition: transform 0.2s;
-      }
-      button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
-      }
-      button:active {
-        transform: translateY(0);
-      }
-      .tabs {
-        display: flex;
-        gap: 10px;
-        margin-bottom: 20px;
-      }
-      .tab {
-        flex: 1;
-        padding: 12px;
-        background: #f5f5f5;
-        border: none;
-        border-radius: 8px;
-        cursor: pointer;
-        font-weight: 600;
-        transition: all 0.3s;
-      }
-      .tab.active {
-        background: #667eea;
-        color: white;
-      }
-      table {
-        width: 100%;
-        border-collapse: collapse;
-      }
-      th {
-        background: #667eea;
-        color: white;
-        padding: 15px;
-        text-align: left;
-        font-weight: 600;
-      }
-      td {
-        padding: 15px;
-        border-bottom: 1px solid #e0e0e0;
-      }
-      tr:hover {
-        background: #f9f9f9;
-      }
-      .badge {
-        display: inline-block;
-        padding: 5px 12px;
-        border-radius: 20px;
-        font-size: 14px;
-        font-weight: 600;
-      }
-      .badge-film {
-        background: #e3f2fd;
-        color: #1976d2;
-      }
-      .badge-serie {
-        background: #f3e5f5;
-        color: #7b1fa2;
-      }
-      .empty {
-        text-align: center;
-        padding: 40px;
-        color: #999;
-      }
-      @media (max-width: 768px) {
-        .header h1 {
-          font-size: 2em;
-        }
-        .card {
-          padding: 20px;
-        }
-      }
-    </style>
-  </head>
-  <body>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Catalogo Jellyfin</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
     <div class="container">
-      <div class="header">
-        <h1>📺 Catalogo Jellyfin</h1>
-        <p>Suggerisci film e serie TV da aggiungere</p>
-      </div>
-
-      <div class="card">
-        <h2>➕ Aggiungi Suggerimento</h2>
-        <form id="suggestionForm">
-          <div class="form-group">
-            <label for="tipo">Tipologia *</label>
-            <select id="tipo" required>
-              <option value="">Scegli...</option>
-              <option value="Film">Film</option>
-              <option value="Serie TV">Serie TV</option>
-            </select>
-          </div>
-          <div class="form-group hidden" id="titoloFilmGroup">
-            <label for="titoloFilm">Titolo Film *</label>
-            <input type="text" id="titoloFilm" placeholder="Es. Inception" />
-          </div>
-          <div class="form-group hidden" id="titoloSerieGroup">
-            <label for="titoloSerie">Titolo Serie TV *</label>
-            <input
-              type="text"
-              id="titoloSerie"
-              placeholder="Es. Breaking Bad"
-            />
-          </div>
-          <button type="submit">Invia Suggerimento</button>
-        </form>
-      </div>
-
-      <div class="card">
-        <h2>📋 Suggerimenti Live</h2>
-        <div class="tabs">
-          <button class="tab active" onclick="filterTable('Tutti')">
-            Tutti
-          </button>
-          <button class="tab" onclick="filterTable('Film')">Film</button>
-          <button class="tab" onclick="filterTable('Serie TV')">
-            Serie TV
-          </button>
+        <div class="header">
+            <h1>📺 Catalogo Jellyfin</h1>
+            <p>Suggerisci film e serie TV</p>
         </div>
-        <div id="tableContainer">
-          <table id="suggestionsTable">
-            <thead>
-              <tr>
-                <th>Tipologia</th>
-                <th>Titolo</th>
-                <th>Data</th>
-              </tr>
-            </thead>
-            <tbody id="tableBody">
-              <tr>
-                <td colspan="3" class="empty">Caricamento...</td>
-              </tr>
-            </tbody>
-          </table>
+
+        <div class="card">
+            <h2>➕ Aggiungi Suggerimento</h2>
+            <form id="form">
+                <label>Tipologia *</label>
+                <select id="tipo" required>
+                    <option value="">Scegli...</option>
+                    <option value="Film">Film</option>
+                    <option value="Serie TV">Serie TV</option>
+                </select>
+
+                <div id="inputFilm" class="hidden">
+                    <label>Titolo Film *</label>
+                    <input type="text" id="titoloFilm" placeholder="Es. Inception">
+                </div>
+
+                <div id="inputSerie" class="hidden">
+                    <label>Titolo Serie TV *</label>
+                    <input type="text" id="titoloSerie" placeholder="Es. Breaking Bad">
+                </div>
+
+                <button type="submit">Invia</button>
+            </form>
         </div>
-      </div>
+
+        <div class="card">
+            <h2>📋 Suggerimenti Live</h2>
+            <div class="tabs">
+                <button class="tab active" onclick="filtra('Tutti')">Tutti</button>
+                <button class="tab" onclick="filtra('Film')">Film</button>
+                <button class="tab" onclick="filtra('Serie TV')">Serie TV</button>
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Tipologia</th>
+                        <th>Titolo</th>
+                        <th>Data</th>
+                    </tr>
+                </thead>
+                <tbody id="tabella">
+                    <tr><td colspan="3" class="vuoto">Caricamento...</td></tr>
+                </tbody>
+            </table>
+        </div>
     </div>
-
-    <script>
-      const FORM_URL = 'TUO_GOOGLE_FORM_URL_QUI';
-      const SHEET_ID = '1zyH-Fg4tUfMQlde9H7tZeVslP6le4P0zKN9uX-O5NEk';
-      let allData = [];
-      let currentFilter = 'Tutti';
-
-      // Toggle input tipo
-      document.getElementById('tipo').addEventListener('change', function() {
-          const tipo = this.value;
-          document.getElementById('titoloFilmGroup').classList.toggle('hidden', tipo !== 'Film');
-          document.getElementById('titoloSerieGroup').classList.toggle('hidden', tipo !== 'Serie TV');
-      });
-
-      // Submit form
-      document.getElementById('suggestionForm').addEventListener('submit', async function(e) {
-          e.preventDefault();
-          const tipo = document.getElementById('tipo').value;
-          const titolo = tipo === 'Film' ? document.getElementById('titoloFilm').value : document.getElementById('titoloSerie').value;
-
-          if (!tipo || !titolo) return alert('Compila tutti i campi!');
-
-          // Invia a Google Sheets via Form
-          const formData = new FormData();
-          formData.append('entry.XXXXXX', tipo); // Sostituisci con entry ID reale
-          formData.append('entry.YYYYYY', titolo);
-
-          try {
-              await fetch(FORM_URL, { method: 'POST', body: formData, mode: 'no-cors' });
-              alert('✅ Suggerimento inviato!');
-              this.reset();
-              document.getElementById('titoloFilmGroup').classList.add('hidden');
-              document.getElementById('titoloSerieGroup').classList.add('hidden');
-              setTimeout(loadData, 2000);
-          } catch(e) {
-              alert('Errore invio. Riprova!');
-          }
-      });
-
-      // Carica dati da Sheet
-      async function loadData() {
-          try {
-              const response = await fetch(`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json`);
-              const text = await response.text();
-              const json = JSON.parse(text.substr(47).slice(0, -2));
-
-              allData = json.table.rows.map(row => ({
-                   row.c[0]?.f || '',
-                  tipo: row.c[1]?.v || '',
-                  titolo: row.c[2]?.v || ''
-              })).filter(item => item.tipo);
-
-              renderTable();
-          } catch(e) {
-              document.getElementById('tableBody').innerHTML = '<tr><td colspan="3" class="empty">Errore caricamento dati</td></tr>';
-          }
-      }
-
-      // Render tabella
-      function renderTable() {
-          const filtered = currentFilter === 'Tutti' ? allData : allData.filter(item => item.tipo === currentFilter);
-          const tbody = document.getElementById('tableBody');
-
-          if (filtered.length === 0) {
-              tbody.innerHTML = '<tr><td colspan="3" class="empty">Nessun suggerimento ancora</td></tr>';
-              return;
-          }
-
-          tbody.innerHTML = filtered.map(item => `
-              <tr>
-                  <td><span class="badge badge-${item.tipo === 'Film' ? 'film' : 'serie'}">${item.tipo}</span></td>
-                  <td><strong>${item.titolo}</strong></td>
-                  <td>${item.data}</td>
-              </tr>
-          `).join('');
-      }
-
-      // Filtra tabella
-      function filterTable(filter) {
-          currentFilter = filter;
-          document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
-          event.target.classList.add('active');
-          renderTable();
-      }
-
-      // Load iniziale
-      loadData();
-      setInterval(loadData, 30000); // Aggiorna ogni 30s
-    </script>
-  </body>
+    <script src="script.js"></script>
+</body>
 </html>
