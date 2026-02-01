@@ -3,61 +3,45 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Catalogo Jellyfin</title>
+    <title>Suggerimenti Catalogo</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="container">
-        <div class="header">
-            <h1>📺 Catalogo Jellyfin</h1>
-            <p>Suggerisci film e serie TV</p>
+        <h1>📺 Suggerimenti Catalogo</h1>
+        
+        <form id="form">
+            <select id="tipo" required>
+                <option value="">Seleziona tipo</option>
+                <option value="Film">Film</option>
+                <option value="Serie TV">Serie TV</option>
+            </select>
+            
+            <input type="text" id="titolo" placeholder="Scrivi il titolo..." required>
+            
+            <button type="submit">Invia Suggerimento</button>
+        </form>
+
+        <div class="tabs">
+            <button class="tab active" onclick="filtra('Tutti')">Tutti</button>
+            <button class="tab" onclick="filtra('Film')">Film</button>
+            <button class="tab" onclick="filtra('Serie TV')">Serie TV</button>
         </div>
 
-        <div class="card">
-            <h2>➕ Aggiungi Suggerimento</h2>
-            <form id="form">
-                <label>Tipologia *</label>
-                <select id="tipo" required>
-                    <option value="">Scegli...</option>
-                    <option value="Film">Film</option>
-                    <option value="Serie TV">Serie TV</option>
-                </select>
-
-                <div id="inputFilm" class="hidden">
-                    <label>Titolo Film *</label>
-                    <input type="text" id="titoloFilm" placeholder="Es. Inception">
-                </div>
-
-                <div id="inputSerie" class="hidden">
-                    <label>Titolo Serie TV *</label>
-                    <input type="text" id="titoloSerie" placeholder="Es. Breaking Bad">
-                </div>
-
-                <button type="submit">Invia</button>
-            </form>
-        </div>
-
-        <div class="card">
-            <h2>📋 Suggerimenti Live</h2>
-            <div class="tabs">
-                <button class="tab active" onclick="filtra('Tutti')">Tutti</button>
-                <button class="tab" onclick="filtra('Film')">Film</button>
-                <button class="tab" onclick="filtra('Serie TV')">Serie TV</button>
-            </div>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Tipologia</th>
-                        <th>Titolo</th>
-                        <th>Data</th>
-                    </tr>
-                </thead>
-                <tbody id="tabella">
-                    <tr><td colspan="3" class="vuoto">Caricamento...</td></tr>
-                </tbody>
-            </table>
-        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Tipo</th>
+                    <th>Titolo</th>
+                    <th>Data</th>
+                </tr>
+            </thead>
+            <tbody id="tabella">
+                <tr><td colspan="3">Caricamento...</td></tr>
+            </tbody>
+        </table>
     </div>
+    
     <script src="script.js"></script>
 </body>
 </html>
