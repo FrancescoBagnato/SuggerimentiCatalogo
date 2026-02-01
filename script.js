@@ -2,24 +2,14 @@ const SHEET_ID = '1zyH-Fg4tUfMQlde9H7tZeVslP6le4P0zKN9uX-O5NEk';
 let dati = [];
 let filtro = 'Tutti';
 
-// Toggle input
-document.getElementById('tipo').addEventListener('change', function() {
-    const tipo = this.value;
-    document.getElementById('inputFilm').classList.toggle('hidden', tipo !== 'Film');
-    document.getElementById('inputSerie').classList.toggle('hidden', tipo !== 'Serie TV');
-});
-
 // Submit form
 document.getElementById('form').addEventListener('submit', async function(e) {
     e.preventDefault();
     const tipo = document.getElementById('tipo').value;
-    const titolo = tipo === 'Film' ? 
-        document.getElementById('titoloFilm').value : 
-        document.getElementById('titoloSerie').value;
+    const titolo = document.getElementById('titolo').value;
     
     if (!tipo || !titolo) return alert('Compila tutti i campi!');
 
-    // Invia a Google Form
     const formUrl = 'https://docs.google.com/forms/d/e/1FAIpQLSfOiTpwkWZyeUlVgC4WZkYLdCCLTg6p-I2lW_FxXjCG3UDXMw/formResponse';
     const formData = new FormData();
     formData.append('entry.1656949296', tipo);
@@ -27,17 +17,15 @@ document.getElementById('form').addEventListener('submit', async function(e) {
 
     try {
         await fetch(formUrl, { method: 'POST', body: formData, mode: 'no-cors' });
-        alert('✅ Suggerimento inviato!');
+        alert('✅ Inviato!');
         this.reset();
-        document.getElementById('inputFilm').classList.add('hidden');
-        document.getElementById('inputSerie').classList.add('hidden');
-        setTimeout(caricaDati, 3000);
+        setTimeout(caricaDati, 2000);
     } catch(e) {
-        alert('❌ Errore invio. Riprova!');
+        alert('❌ Errore!');
     }
 });
 
-// Carica dati Sheet
+// Carica dati
 async function caricaDati() {
     try {
         const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json`;
@@ -53,9 +41,7 @@ async function caricaDati() {
 
         mostraTabella();
     } catch(e) {
-        console.error('Errore:', e);
-        document.getElementById('tabella').innerHTML = 
-            '<tr><td colspan="3" class="vuoto">Errore caricamento</td></tr>';
+        document.getElementById('tabella').innerHTML = '<tr><td colspan="3">Errore caricamento</td></tr>';
     }
 }
 
@@ -65,7 +51,7 @@ function mostraTabella() {
     const tbody = document.getElementById('tabella');
     
     if (filtrati.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="3" class="vuoto">Nessun suggerimento ancora</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="3">Nessun suggerimento</td></tr>';
         return;
     }
 
@@ -86,6 +72,5 @@ function filtra(nuovoFiltro) {
     mostraTabella();
 }
 
-// Avvio
 caricaDati();
 setInterval(caricaDati, 20000);
