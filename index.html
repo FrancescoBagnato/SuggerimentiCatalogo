@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="it">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Richieste Jellyfin</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <h1>🎬 Richieste Catalogo Jellyfin</h1>
+        <p>Aggiungi film o serie TV che vorresti vedere</p>
+      </header>
+
+      <section class="form-section">
+        <form id="requestForm">
+          <div class="form-group">
+            <label for="title">Titolo *</label>
+            <input
+              type="text"
+              id="title"
+              required
+              placeholder="Es: Breaking Bad"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="type">Tipo *</label>
+            <select id="type" required>
+              <option value="">Seleziona...</option>
+              <option value="Film">Film</option>
+              <option value="Serie TV">Serie TV</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="requester">Il tuo nome *</label>
+            <input
+              type="text"
+              id="requester"
+              required
+              placeholder="Es: Marco"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="notes">Note (opzionale)</label>
+            <textarea
+              id="notes"
+              rows="3"
+              placeholder="Es: Stagione 2, versione italiana..."
+            ></textarea>
+          </div>
+
+          <button type="submit" class="btn-submit">Invia Richiesta</button>
+        </form>
+      </section>
+
+      <section class="requests-section">
+        <h2>📋 Richieste Recenti</h2>
+        <div id="requestsList" class="requests-list">
+          <!-- Le richieste appariranno qui -->
+        </div>
+      </section>
+    </div>
+
+    <script type="module" src="script.js"></script>
+  </body>
+</html>
