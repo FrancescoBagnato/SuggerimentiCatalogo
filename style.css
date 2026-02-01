@@ -62,10 +62,14 @@ select, input {
 select:focus, input:focus {
     outline: none;
     border-color: #667eea;
+    .hidden {
+    display: none !important;
+}
+
 }
 
 .hidden {
-    display: none;
+    display: none !important;
 }
 
 button {
