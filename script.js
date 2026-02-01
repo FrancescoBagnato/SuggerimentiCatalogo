@@ -18,7 +18,7 @@ const firebaseConfig = {
 // ============================================
 // PASSWORD ADMIN (CAMBIALA!)
 // ============================================
-const ADMIN_PASSWORD = "jellyfin2026"; // CAMBIA QUESTA PASSWORD!
+const ADMIN_PASSWORD = "Psw1!"; // CAMBIA QUESTA PASSWORD!
 
 // Inizializza Firebase
 const app = initializeApp(firebaseConfig);
