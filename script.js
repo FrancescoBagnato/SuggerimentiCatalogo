@@ -2,7 +2,7 @@
 // CONFIGURAZIONE FIREBASE
 // ============================================
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js';
-import { getDatabase, ref, push, onValue, query, orderByChild, limitToLast, update } from 'https://www.gstatic.com/firebasejs/12.8.0/firebase-database.js';
+import { getDatabase, ref, push, onValue, query, orderByChild, limitToLast, update, remove } from 'https://www.gstatic.com/firebasejs/12.8.0/firebase-database.js';
 
 const firebaseConfig = {
     apiKey: "AIzaSyCVI_TP1LaLIUDc3QLaJtapvoeZ7mOFqcI",
@@ -15,6 +15,11 @@ const firebaseConfig = {
     measurementId: "G-LNZ45LZE6N"
 };
 
+// ============================================
+// PASSWORD ADMIN (CAMBIALA!)
+// ============================================
+const ADMIN_PASSWORD = "jellyfin2026"; // CAMBIA QUESTA PASSWORD!
+
 // Inizializza Firebase
 const app = initializeApp(firebaseConfig);
 const database = getDatabase(app);
@@ -25,6 +30,7 @@ const requestsRef = ref(database, 'requests');
 // ============================================
 let allRequests = [];
 let currentSort = 'votes';
+let isAdminMode = false;
 
 // ============================================
 // FUNZIONI
@@ -52,6 +58,63 @@ function saveVote(requestId) {
 // Controlla se l'utente ha già votato
 function hasVoted(requestId) {
     return getVotedRequests().includes(requestId);
+}
+
+// Controlla se è admin
+function checkAdminMode() {
+    return localStorage.getItem('isAdmin') === 'true';
+}
+
+// Attiva modalità admin
+function enableAdminMode() {
+    const password = prompt('Inserisci la password admin:');
+    if (password === ADMIN_PASSWORD) {
+        localStorage.setItem('isAdmin', 'true');
+        isAdminMode = true;
+        updateAdminButton();
+        displayRequests(allRequests);
+        alert('✅ Modalità admin attivata!');
+    } else if (password !== null) {
+        alert('❌ Password errata!');
+    }
+}
+
+// Disattiva modalità admin
+function disableAdminMode() {
+    localStorage.removeItem('isAdmin');
+    isAdminMode = false;
+    updateAdminButton();
+    displayRequests(allRequests);
+}
+
+// Aggiorna pulsante admin
+function updateAdminButton() {
+    const adminBtn = document.getElementById('adminToggle');
+    if (isAdminMode) {
+        adminBtn.textContent = '🔓 Esci da Admin';
+        adminBtn.classList.add('admin-active');
+    } else {
+        adminBtn.textContent = '🔐 Modalità Admin';
+        adminBtn.classList.remove('admin-active');
+    }
+}
+
+// Elimina richiesta
+async function deleteRequest(requestId, title) {
+    if (!isAdminMode) {
+        alert('Devi essere in modalità admin per eliminare richieste!');
+        return;
+    }
+    
+    const confirm = window.confirm(`Sei sicuro di voler eliminare "${title}"?\n\nQuesta azione è irreversibile.`);
+    if (!confirm) return;
+    
+    try {
+        await remove(ref(database, `requests/${requestId}`));
+        showSuccessMessage('🗑️ Richiesta eliminata con successo!');
+    } catch (error) {
+        alert('❌ Errore durante l\'eliminazione: ' + error.message);
+    }
 }
 
 // Vota una richiesta
@@ -104,7 +167,7 @@ function displayRequests(requests) {
             <div class="request-header">
                 <span class="request-title">${escapeHtml(req.title)}</span>
                 <div style="display: flex; gap: 10px; align-items: center;">
-                    <span class="priority-badge">Priorità ${req.priority}</span>
+                    ${req.priority ? `<span class="priority-badge">Priorità ${req.priority}</span>` : ''}
                     <span class="request-type">${escapeHtml(req.type)}</span>
                 </div>
             </div>
@@ -120,6 +183,7 @@ function displayRequests(requests) {
                     👍 ${hasVoted(req.id) ? 'Votato' : 'Vota'}
                 </button>
                 <span class="vote-count">🔥 ${req.votes || 0} voti</span>
+                ${isAdminMode ? `<button class="delete-btn" data-request-id="${req.id}" data-title="${escapeHtml(req.title)}">🗑️ Elimina</button>` : ''}
             </div>
         </div>
     `).join('');
@@ -131,18 +195,29 @@ function displayRequests(requests) {
             voteRequest(requestId);
         });
     });
+    
+    // Aggiungi event listener ai pulsanti elimina
+    if (isAdminMode) {
+        document.querySelectorAll('.delete-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const requestId = this.getAttribute('data-request-id');
+                const title = this.getAttribute('data-title');
+                deleteRequest(requestId, title);
+            });
+        });
+    }
 }
 
 // Mostra messaggio di successo
-function showSuccessMessage() {
+function showSuccessMessage(message = '✅ Richiesta inviata con successo!') {
     const form = document.getElementById('requestForm');
-    const message = document.createElement('div');
-    message.className = 'success-message';
-    message.textContent = '✅ Richiesta inviata con successo!';
-    form.parentElement.insertBefore(message, form);
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'success-message';
+    messageDiv.textContent = message;
+    form.parentElement.insertBefore(messageDiv, form);
     
     setTimeout(() => {
-        message.remove();
+        messageDiv.remove();
     }, 3000);
 }
 
@@ -212,3 +287,18 @@ document.querySelectorAll('.sort-btn').forEach(btn => {
         displayRequests(allRequests);
     });
 });
+
+// ============================================
+// GESTISCI MODALITÀ ADMIN
+// ============================================
+document.getElementById('adminToggle').addEventListener('click', function() {
+    if (isAdminMode) {
+        disableAdminMode();
+    } else {
+        enableAdminMode();
+    }
+});
+
+// Controlla se già in modalità admin al caricamento
+isAdminMode = checkAdminMode();
+updateAdminButton();
