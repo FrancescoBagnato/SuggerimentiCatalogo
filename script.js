@@ -116,13 +116,21 @@ function displayRequests(requests) {
             </div>
             ${req.notes ? `<div class="request-notes">📝 ${escapeHtml(req.notes)}</div>` : ''}
             <div class="vote-section">
-                <button class="vote-btn" onclick="window.voteRequest('${req.id}')" ${hasVoted(req.id) ? 'disabled style="opacity:0.5; cursor:not-allowed;"' : ''}>
+                <button class="vote-btn" data-request-id="${req.id}" ${hasVoted(req.id) ? 'disabled style="opacity:0.5; cursor:not-allowed;"' : ''}>
                     👍 ${hasVoted(req.id) ? 'Votato' : 'Vota'}
                 </button>
                 <span class="vote-count">🔥 ${req.votes || 0} voti</span>
             </div>
         </div>
     `).join('');
+    
+    // Aggiungi event listener ai pulsanti di voto
+    document.querySelectorAll('.vote-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const requestId = this.getAttribute('data-request-id');
+            voteRequest(requestId);
+        });
+    });
 }
 
 // Mostra messaggio di successo
@@ -204,6 +212,3 @@ document.querySelectorAll('.sort-btn').forEach(btn => {
         displayRequests(allRequests);
     });
 });
-
-// Esponi funzione voteRequest globalmente
-window.voteRequest = voteRequest;
