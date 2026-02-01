@@ -18,7 +18,7 @@ const firebaseConfig = {
 // ============================================
 // PASSWORD ADMIN (CAMBIALA!)
 // ============================================
-const ADMIN_PASSWORD = "Psw1!"; 
+const ADMIN_PASSWORD = "jellyfin2026"; // CAMBIA QUESTA PASSWORD!
 
 // Inizializza Firebase
 const app = initializeApp(firebaseConfig);
@@ -29,7 +29,7 @@ const requestsRef = ref(database, 'requests');
 // VARIABILI GLOBALI
 // ============================================
 let allRequests = [];
-let currentSort = 'votes';
+let currentSort = 'priority'; // Ordina per priorità di default
 let isAdminMode = false;
 
 // ============================================
@@ -67,7 +67,7 @@ function checkAdminMode() {
 
 // Attiva modalità admin
 function enableAdminMode() {
-    const password = prompt('Inserisci la password admin:');
+    const password = prompt('🔐 Inserisci la password admin:');
     if (password === ADMIN_PASSWORD) {
         localStorage.setItem('isAdmin', 'true');
         isAdminMode = true;
@@ -90,37 +90,39 @@ function disableAdminMode() {
 // Aggiorna pulsante admin
 function updateAdminButton() {
     const adminBtn = document.getElementById('adminToggle');
-    if (isAdminMode) {
-        adminBtn.textContent = '🔓 Esci da Admin';
-        adminBtn.classList.add('admin-active');
-    } else {
-        adminBtn.textContent = '🔐 Modalità Admin';
-        adminBtn.classList.remove('admin-active');
+    if (adminBtn) {
+        if (isAdminMode) {
+            adminBtn.innerHTML = '🔓 Modalità Admin Attiva';
+            adminBtn.classList.add('admin-active');
+        } else {
+            adminBtn.innerHTML = '🔐 Accedi come Admin';
+            adminBtn.classList.remove('admin-active');
+        }
     }
 }
 
 // Elimina richiesta
 async function deleteRequest(requestId, title) {
     if (!isAdminMode) {
-        alert('Devi essere in modalità admin per eliminare richieste!');
+        alert('❌ Devi essere in modalità admin per eliminare richieste!');
         return;
     }
     
-    const confirm = window.confirm(`Sei sicuro di voler eliminare "${title}"?\n\nQuesta azione è irreversibile.`);
-    if (!confirm) return;
+    const confirmed = window.confirm(`Eliminare "${title}"?\n\n⚠️ Questa azione è irreversibile.`);
+    if (!confirmed) return;
     
     try {
         await remove(ref(database, `requests/${requestId}`));
-        showSuccessMessage('🗑️ Richiesta eliminata con successo!');
+        // Non serve chiamare displayRequests, Firebase onValue lo fa automaticamente
     } catch (error) {
         alert('❌ Errore durante l\'eliminazione: ' + error.message);
     }
 }
 
-// Vota una richiesta
+// Vota una richiesta (aumenta priorità di +1)
 async function voteRequest(requestId) {
     if (hasVoted(requestId)) {
-        alert('Hai già votato per questa richiesta!');
+        alert('✋ Hai già votato per questa richiesta!');
         return;
     }
     
@@ -128,20 +130,24 @@ async function voteRequest(requestId) {
     if (!requestToUpdate) return;
     
     const newVotes = (requestToUpdate.votes || 0) + 1;
+    const newPriority = (requestToUpdate.priority || 0) + 1;
     
     try {
         await update(ref(database, `requests/${requestId}`), {
-            votes: newVotes
+            votes: newVotes,
+            priority: newPriority
         });
         saveVote(requestId);
     } catch (error) {
-        alert('Errore durante il voto: ' + error.message);
+        alert('❌ Errore durante il voto: ' + error.message);
     }
 }
 
 // Ordina richieste
 function sortRequests(requests) {
-    if (currentSort === 'votes') {
+    if (currentSort === 'priority') {
+        return [...requests].sort((a, b) => (b.priority || 0) - (a.priority || 0));
+    } else if (currentSort === 'votes') {
         return [...requests].sort((a, b) => (b.votes || 0) - (a.votes || 0));
     } else {
         return [...requests].sort((a, b) => b.timestamp - a.timestamp);
@@ -167,7 +173,7 @@ function displayRequests(requests) {
             <div class="request-header">
                 <span class="request-title">${escapeHtml(req.title)}</span>
                 <div style="display: flex; gap: 10px; align-items: center;">
-                    ${req.priority ? `<span class="priority-badge">Priorità ${req.priority}</span>` : ''}
+                    <span class="priority-badge">Priorità ${req.priority || 0}</span>
                     <span class="request-type">${escapeHtml(req.type)}</span>
                 </div>
             </div>
@@ -179,8 +185,8 @@ function displayRequests(requests) {
             </div>
             ${req.notes ? `<div class="request-notes">📝 ${escapeHtml(req.notes)}</div>` : ''}
             <div class="vote-section">
-                <button class="vote-btn" data-request-id="${req.id}" ${hasVoted(req.id) ? 'disabled style="opacity:0.5; cursor:not-allowed;"' : ''}>
-                    👍 ${hasVoted(req.id) ? 'Votato' : 'Vota'}
+                <button class="vote-btn" data-request-id="${req.id}" ${hasVoted(req.id) ? 'disabled' : ''}>
+                    ${hasVoted(req.id) ? '✅ Votato' : '👍 Vota (+1 priorità)'}
                 </button>
                 <span class="vote-count">🔥 ${req.votes || 0} voti</span>
                 ${isAdminMode ? `<button class="delete-btn" data-request-id="${req.id}" data-title="${escapeHtml(req.title)}">🗑️ Elimina</button>` : ''}
@@ -189,7 +195,7 @@ function displayRequests(requests) {
     `).join('');
     
     // Aggiungi event listener ai pulsanti di voto
-    document.querySelectorAll('.vote-btn').forEach(btn => {
+    document.querySelectorAll('.vote-btn:not([disabled])').forEach(btn => {
         btn.addEventListener('click', function() {
             const requestId = this.getAttribute('data-request-id');
             voteRequest(requestId);
@@ -210,11 +216,13 @@ function displayRequests(requests) {
 
 // Mostra messaggio di successo
 function showSuccessMessage(message = '✅ Richiesta inviata con successo!') {
-    const form = document.getElementById('requestForm');
+    const formSection = document.querySelector('.form-section');
+    if (!formSection) return;
+    
     const messageDiv = document.createElement('div');
     messageDiv.className = 'success-message';
     messageDiv.textContent = message;
-    form.parentElement.insertBefore(messageDiv, form);
+    formSection.insertBefore(messageDiv, formSection.firstChild);
     
     setTimeout(() => {
         messageDiv.remove();
@@ -289,16 +297,22 @@ document.querySelectorAll('.sort-btn').forEach(btn => {
 });
 
 // ============================================
-// GESTISCI MODALITÀ ADMIN
+// INIZIALIZZAZIONE
 // ============================================
-document.getElementById('adminToggle').addEventListener('click', function() {
-    if (isAdminMode) {
-        disableAdminMode();
-    } else {
-        enableAdminMode();
-    }
-});
-
 // Controlla se già in modalità admin al caricamento
 isAdminMode = checkAdminMode();
 updateAdminButton();
+
+// Aggiungi event listener al pulsante admin quando il DOM è pronto
+setTimeout(() => {
+    const adminBtn = document.getElementById('adminToggle');
+    if (adminBtn) {
+        adminBtn.addEventListener('click', function() {
+            if (isAdminMode) {
+                disableAdminMode();
+            } else {
+                enableAdminMode();
+            }
+        });
+    }
+}, 100);
