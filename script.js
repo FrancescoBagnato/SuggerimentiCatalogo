@@ -70,7 +70,11 @@ function enableAdminMode() {
         localStorage.setItem('isAdmin', 'true');
         isAdminMode = true;
         updateAdminButton();
-        displayRequests(allRequests);
+        if (currentSort === 'evased') {
+            displayEvased(allEvased);
+        } else {
+            displayRequests(allRequests);
+        }
         alert('✅ Modalità admin attivata!');
     } else if (password !== null) {
         alert('❌ Password errata!');
@@ -81,7 +85,11 @@ function disableAdminMode() {
     localStorage.removeItem('isAdmin');
     isAdminMode = false;
     updateAdminButton();
-    displayRequests(allRequests);
+    if (currentSort === 'evased') {
+        displayEvased(allEvased);
+    } else {
+        displayRequests(allRequests);
+    }
 }
 
 function updateAdminButton() {
@@ -231,11 +239,11 @@ function displayRequests(requests) {
 // DISPLAY EVASE
 // ============================================
 function displayEvased(evased) {
-    const evasedList = document.getElementById('evasedList');
-    const countBadge = document.getElementById('evasedCount');
+    const requestsList = document.getElementById('requestsList');
+    const countBadge = document.getElementById('requestCount');
 
     if (!evased || evased.length === 0) {
-        evasedList.innerHTML = '<div class="empty-state">Nessuna richiesta evasa ancora.</div>';
+        requestsList.innerHTML = '<div class="empty-state">Nessuna richiesta evasa ancora.</div>';
         countBadge.textContent = '0';
         return;
     }
@@ -243,7 +251,7 @@ function displayEvased(evased) {
     countBadge.textContent = evased.length;
     const sortedEvased = [...evased].sort((a, b) => b.evadedTimestamp - a.evadedTimestamp);
 
-    evasedList.innerHTML = sortedEvased.map(req => `
+    requestsList.innerHTML = sortedEvased.map(req => `
         <div class="request-card evased-card">
             <div class="request-header">
                 <span class="request-title">${escapeHtml(req.title)}</span>
@@ -287,7 +295,9 @@ onValue(recentRequestsQuery, (snapshot) => {
             ...childSnapshot.val()
         });
     });
-    displayRequests(allRequests);
+    if (currentSort !== 'evased') {
+        displayRequests(allRequests);
+    }
 });
 
 // ============================================
@@ -302,7 +312,9 @@ onValue(evasedQuery, (snapshot) => {
             ...childSnapshot.val()
         });
     });
-    displayEvased(allEvased);
+    if (currentSort === 'evased') {
+        displayEvased(allEvased);
+    }
 });
 
 // ============================================
@@ -352,7 +364,12 @@ document.querySelectorAll('.sort-btn').forEach(btn => {
         document.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('active'));
         this.classList.add('active');
         currentSort = this.dataset.sort;
-        displayRequests(allRequests);
+
+        if (currentSort === 'evased') {
+            displayEvased(allEvased);
+        } else {
+            displayRequests(allRequests);
+        }
     });
 });
 
