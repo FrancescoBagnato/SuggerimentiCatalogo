@@ -2,7 +2,7 @@
 // CONFIGURAZIONE FIREBASE
 // ============================================
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js';
-import { getDatabase, ref, push, onValue, query, orderByChild, limitToLast, update, remove } from 'https://www.gstatic.com/firebasejs/12.8.0/firebase-database.js';
+import { getDatabase, ref, push, onValue, query, orderByChild, limitToLast, update, remove, get } from 'https://www.gstatic.com/firebasejs/12.8.0/firebase-database.js';
 
 const firebaseConfig = {
     apiKey: "AIzaSyCVI_TP1LaLIUDc3QLaJtapvoeZ7mOFqcI",
@@ -18,54 +18,52 @@ const firebaseConfig = {
 // ============================================
 // PASSWORD ADMIN (CAMBIALA!)
 // ============================================
-const ADMIN_PASSWORD = "Psw1!"; // CAMBIA QUESTA PASSWORD!
+const ADMIN_PASSWORD = "Psw1!";
 
 // Inizializza Firebase
 const app = initializeApp(firebaseConfig);
 const database = getDatabase(app);
 const requestsRef = ref(database, 'requests');
+const evasedRef = ref(database, 'evased');
 
 // ============================================
 // VARIABILI GLOBALI
 // ============================================
 let allRequests = [];
-let currentSort = 'priority'; // Ordina per priorità di default
+let allEvased = [];
+let currentSort = 'priority';
 let isAdminMode = false;
 
 // ============================================
-// FUNZIONI
+// FUNZIONI UTILITY
 // ============================================
-
-// Escape HTML per sicurezza
 function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
 }
 
-// Ottieni voti salvati in localStorage
 function getVotedRequests() {
     return JSON.parse(localStorage.getItem('votedRequests')) || [];
 }
 
-// Salva voto in localStorage
 function saveVote(requestId) {
     const voted = getVotedRequests();
     voted.push(requestId);
     localStorage.setItem('votedRequests', JSON.stringify(voted));
 }
 
-// Controlla se l'utente ha già votato
 function hasVoted(requestId) {
     return getVotedRequests().includes(requestId);
 }
 
-// Controlla se è admin
 function checkAdminMode() {
     return localStorage.getItem('isAdmin') === 'true';
 }
 
-// Attiva modalità admin
+// ============================================
+// FUNZIONI ADMIN
+// ============================================
 function enableAdminMode() {
     const password = prompt('🔐 Inserisci la password admin:');
     if (password === ADMIN_PASSWORD) {
@@ -79,7 +77,6 @@ function enableAdminMode() {
     }
 }
 
-// Disattiva modalità admin
 function disableAdminMode() {
     localStorage.removeItem('isAdmin');
     isAdminMode = false;
@@ -87,7 +84,6 @@ function disableAdminMode() {
     displayRequests(allRequests);
 }
 
-// Aggiorna pulsante admin
 function updateAdminButton() {
     const adminBtn = document.getElementById('adminToggle');
     if (adminBtn) {
@@ -101,37 +97,57 @@ function updateAdminButton() {
     }
 }
 
-// Elimina richiesta
-async function deleteRequest(requestId, title) {
+// ============================================
+// SPOSTA IN EVASE
+// ============================================
+async function moveToEvase(requestId, title) {
     if (!isAdminMode) {
-        alert('❌ Devi essere in modalità admin per eliminare richieste!');
+        alert('❌ Devi essere in modalità admin per evadere richieste!');
         return;
     }
-    
-    const confirmed = window.confirm(`Eliminare "${title}"?\n\n⚠️ Questa azione è irreversibile.`);
+
+    const confirmed = window.confirm(`Evadere "${title}"?\n\n✅ Verrà spostata nella sezione "Richieste Evase" visibile a tutti.`);
     if (!confirmed) return;
-    
+
     try {
+        const requestSnapshot = await get(ref(database, `requests/${requestId}`));
+        const requestData = requestSnapshot.val();
+
+        if (!requestData) {
+            alert('❌ Richiesta non trovata!');
+            return;
+        }
+
+        const evadedData = {
+            ...requestData,
+            status: 'evasa',
+            evadedAt: new Date().toLocaleDateString('it-IT'),
+            evadedTimestamp: Date.now()
+        };
+
+        await push(evasedRef, evadedData);
         await remove(ref(database, `requests/${requestId}`));
-        // Non serve chiamare displayRequests, Firebase onValue lo fa automaticamente
+
     } catch (error) {
-        alert('❌ Errore durante l\'eliminazione: ' + error.message);
+        alert('❌ Errore durante l\'evasione: ' + error.message);
     }
 }
 
-// Vota una richiesta (aumenta priorità di +1)
+// ============================================
+// VOTO
+// ============================================
 async function voteRequest(requestId) {
     if (hasVoted(requestId)) {
         alert('✋ Hai già votato per questa richiesta!');
         return;
     }
-    
+
     const requestToUpdate = allRequests.find(req => req.id === requestId);
     if (!requestToUpdate) return;
-    
+
     const newVotes = (requestToUpdate.votes || 0) + 1;
     const newPriority = (requestToUpdate.priority || 0) + 1;
-    
+
     try {
         await update(ref(database, `requests/${requestId}`), {
             votes: newVotes,
@@ -143,31 +159,33 @@ async function voteRequest(requestId) {
     }
 }
 
-// Ordina richieste
+// ============================================
+// ORDINAMENTO
+// ============================================
 function sortRequests(requests) {
     if (currentSort === 'priority') {
         return [...requests].sort((a, b) => (b.priority || 0) - (a.priority || 0));
-    } else if (currentSort === 'votes') {
-        return [...requests].sort((a, b) => (b.votes || 0) - (a.votes || 0));
     } else {
         return [...requests].sort((a, b) => b.timestamp - a.timestamp);
     }
 }
 
-// Mostra richieste
+// ============================================
+// DISPLAY RICHIESTE
+// ============================================
 function displayRequests(requests) {
     const requestsList = document.getElementById('requestsList');
     const countBadge = document.getElementById('requestCount');
-    
+
     if (!requests || requests.length === 0) {
         requestsList.innerHTML = '<div class="empty-state">Nessuna richiesta ancora. Sii il primo! 🎬</div>';
         countBadge.textContent = '0';
         return;
     }
-    
+
     countBadge.textContent = requests.length;
     const sortedRequests = sortRequests(requests);
-    
+
     requestsList.innerHTML = sortedRequests.map(req => `
         <div class="request-card">
             <div class="request-header">
@@ -189,51 +207,78 @@ function displayRequests(requests) {
                     ${hasVoted(req.id) ? '✅ Votato' : '👍 Vota (+1 priorità)'}
                 </button>
                 <span class="vote-count">🔥 ${req.votes || 0} voti</span>
-                ${isAdminMode ? `<button class="delete-btn" data-request-id="${req.id}" data-title="${escapeHtml(req.title)}">🗑️ Elimina</button>` : ''}
+                ${isAdminMode ? `<button class="evade-btn" data-request-id="${req.id}" data-title="${escapeHtml(req.title)}">✅ Evadi</button>` : ''}
             </div>
         </div>
     `).join('');
-    
-    // Aggiungi event listener ai pulsanti di voto
+
     document.querySelectorAll('.vote-btn:not([disabled])').forEach(btn => {
         btn.addEventListener('click', function() {
-            const requestId = this.getAttribute('data-request-id');
-            voteRequest(requestId);
+            voteRequest(this.getAttribute('data-request-id'));
         });
     });
-    
-    // Aggiungi event listener ai pulsanti elimina
+
     if (isAdminMode) {
-        document.querySelectorAll('.delete-btn').forEach(btn => {
+        document.querySelectorAll('.evade-btn').forEach(btn => {
             btn.addEventListener('click', function() {
-                const requestId = this.getAttribute('data-request-id');
-                const title = this.getAttribute('data-title');
-                deleteRequest(requestId, title);
+                moveToEvase(this.getAttribute('data-request-id'), this.getAttribute('data-title'));
             });
         });
     }
 }
 
-// Mostra messaggio di successo
+// ============================================
+// DISPLAY EVASE
+// ============================================
+function displayEvased(evased) {
+    const evasedList = document.getElementById('evasedList');
+    const countBadge = document.getElementById('evasedCount');
+
+    if (!evased || evased.length === 0) {
+        evasedList.innerHTML = '<div class="empty-state">Nessuna richiesta evasa ancora.</div>';
+        countBadge.textContent = '0';
+        return;
+    }
+
+    countBadge.textContent = evased.length;
+    const sortedEvased = [...evased].sort((a, b) => b.evadedTimestamp - a.evadedTimestamp);
+
+    evasedList.innerHTML = sortedEvased.map(req => `
+        <div class="request-card evased-card">
+            <div class="request-header">
+                <span class="request-title">${escapeHtml(req.title)}</span>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <span class="request-type">${escapeHtml(req.type)}</span>
+                    <span class="evased-badge">✅ Evad. ${req.evadedAt}</span>
+                </div>
+            </div>
+            <div class="request-info">
+                👤 <strong>${escapeHtml(req.requester)}</strong> | Priorità: ${req.priority || 0}
+            </div>
+            ${req.notes ? `<div class="request-notes">${escapeHtml(req.notes)}</div>` : ''}
+            <div class="request-info small">
+                📊 ${req.votes || 0} voti totali
+            </div>
+        </div>
+    `).join('');
+}
+
+// ============================================
+// MESSAGGIO SUCCESSO
+// ============================================
 function showSuccessMessage(message = '✅ Richiesta inviata con successo!') {
     const formSection = document.querySelector('.form-section');
-    if (!formSection) return;
-    
     const messageDiv = document.createElement('div');
     messageDiv.className = 'success-message';
     messageDiv.textContent = message;
     formSection.insertBefore(messageDiv, formSection.firstChild);
-    
-    setTimeout(() => {
-        messageDiv.remove();
-    }, 3000);
+    setTimeout(() => messageDiv.remove(), 3000);
 }
 
 // ============================================
-// ASCOLTA RICHIESTE IN TEMPO REALE
+// LISTENER FIREBASE — RICHIESTE
 // ============================================
 const recentRequestsQuery = query(requestsRef, orderByChild('timestamp'), limitToLast(100));
-
 onValue(recentRequestsQuery, (snapshot) => {
     allRequests = [];
     snapshot.forEach((childSnapshot) => {
@@ -246,24 +291,39 @@ onValue(recentRequestsQuery, (snapshot) => {
 });
 
 // ============================================
-// GESTISCI INVIO FORM
+// LISTENER FIREBASE — EVASE
+// ============================================
+const evasedQuery = query(evasedRef, orderByChild('evadedTimestamp'), limitToLast(100));
+onValue(evasedQuery, (snapshot) => {
+    allEvased = [];
+    snapshot.forEach((childSnapshot) => {
+        allEvased.push({
+            id: childSnapshot.key,
+            ...childSnapshot.val()
+        });
+    });
+    displayEvased(allEvased);
+});
+
+// ============================================
+// FORM SUBMIT
 // ============================================
 document.getElementById('requestForm').addEventListener('submit', async function(e) {
     e.preventDefault();
-    
+
     const submitBtn = this.querySelector('.btn-submit');
     submitBtn.disabled = true;
     submitBtn.textContent = 'Invio in corso...';
-    
+
     const newRequest = {
         title: document.getElementById('title').value.trim(),
         type: document.getElementById('type').value,
         priority: parseInt(document.getElementById('priority').value),
         requester: document.getElementById('requester').value.trim(),
         notes: document.getElementById('notes').value.trim(),
-        date: new Date().toLocaleDateString('it-IT', { 
-            day: '2-digit', 
-            month: '2-digit', 
+        date: new Date().toLocaleDateString('it-IT', {
+            day: '2-digit',
+            month: '2-digit',
             year: 'numeric',
             hour: '2-digit',
             minute: '2-digit'
@@ -271,7 +331,7 @@ document.getElementById('requestForm').addEventListener('submit', async function
         timestamp: Date.now(),
         votes: 0
     };
-    
+
     try {
         await push(requestsRef, newRequest);
         this.reset();
@@ -285,7 +345,7 @@ document.getElementById('requestForm').addEventListener('submit', async function
 });
 
 // ============================================
-// GESTISCI ORDINAMENTO
+// ORDINAMENTO BOTTONI
 // ============================================
 document.querySelectorAll('.sort-btn').forEach(btn => {
     btn.addEventListener('click', function() {
@@ -299,20 +359,13 @@ document.querySelectorAll('.sort-btn').forEach(btn => {
 // ============================================
 // INIZIALIZZAZIONE
 // ============================================
-// Controlla se già in modalità admin al caricamento
 isAdminMode = checkAdminMode();
 updateAdminButton();
 
-// Aggiungi event listener al pulsante admin quando il DOM è pronto
-setTimeout(() => {
-    const adminBtn = document.getElementById('adminToggle');
-    if (adminBtn) {
-        adminBtn.addEventListener('click', function() {
-            if (isAdminMode) {
-                disableAdminMode();
-            } else {
-                enableAdminMode();
-            }
-        });
+document.getElementById('adminToggle').addEventListener('click', function() {
+    if (isAdminMode) {
+        disableAdminMode();
+    } else {
+        enableAdminMode();
     }
-}, 100);
+});
