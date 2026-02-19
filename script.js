@@ -146,7 +146,7 @@ async function moveToEvase(requestId, title) {
 // ============================================
 async function voteRequest(requestId) {
     if (hasVoted(requestId)) {
-        alert('✋ Hai già votato per questa richiesta!');
+        alert('Hai già votato per questa richiesta!');
         return;
     }
 
@@ -163,7 +163,7 @@ async function voteRequest(requestId) {
         });
         saveVote(requestId);
     } catch (error) {
-        alert('❌ Errore durante il voto: ' + error.message);
+        alert('Errore durante il voto: ' + error.message);
     }
 }
 
@@ -214,7 +214,7 @@ function displayRequests(requests) {
                 <button class="vote-btn" data-request-id="${req.id}" ${hasVoted(req.id) ? 'disabled' : ''}>
                     ${hasVoted(req.id) ? '✅ Votato' : '👍 Vota (+1 priorità)'}
                 </button>
-                <span class="vote-count">🔥 ${req.votes || 0} voti</span>
+                <span class="vote-count">${req.votes || 0} voti</span>
                 ${isAdminMode ? `<button class="evade-btn" data-request-id="${req.id}" data-title="${escapeHtml(req.title)}">✅ Evadi</button>` : ''}
             </div>
         </div>
@@ -257,7 +257,7 @@ function displayEvased(evased) {
                 <span class="request-title">${escapeHtml(req.title)}</span>
                 <div style="display: flex; gap: 10px; align-items: center;">
                     <span class="request-type">${escapeHtml(req.type)}</span>
-                    <span class="evased-badge">✅ ${req.evadedAt}</span>
+                    <span class="evased-badge">${req.evadedAt}</span>
                 </div>
             </div>
             <div class="request-info">
