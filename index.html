@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="it">
 <head>
@@ -12,9 +11,8 @@
         <header>
             <h1>🎬 Richieste Catalogo</h1>
             <p>Aggiungi film o serie TV che vorresti vedere</p>
-            <button id="adminToggle" class="admin-toggle">🔐 Modalità Admin</button>
+            <button id="adminToggle" class="admin-toggle">🔐 Accedi come Admin</button>
         </header>
-
 
         <section class="form-section">
             <form id="requestForm">
@@ -67,9 +65,18 @@
                 <button class="sort-btn active" data-sort="priority">⭐ Per Priorità</button>
                 <button class="sort-btn" data-sort="date">🕒 Per Data</button>
             </div>
-
             <div id="requestsList" class="requests-list">
                 <div class="loading">Caricamento richieste...</div>
+            </div>
+        </section>
+
+        <section class="requests-section">
+            <div class="section-header">
+                <h2>✅ Richieste Evase</h2>
+                <span id="evasedCount" class="count-badge">0</span>
+            </div>
+            <div id="evasedList" class="requests-list">
+                <div class="loading">Caricamento evase...</div>
             </div>
         </section>
     </div>
