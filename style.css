@@ -202,7 +202,7 @@ header p {
 
 .requests-list {
     min-height: 200px;
-    max-height: 600px;
+    max-height: 400px;
     overflow-y: auto;
 }
 
