@@ -249,7 +249,7 @@ function displayEvased(evased) {
                 <span class="request-title">${escapeHtml(req.title)}</span>
                 <div style="display: flex; gap: 10px; align-items: center;">
                     <span class="request-type">${escapeHtml(req.type)}</span>
-                    <span class="evased-badge">✅ Evad. ${req.evadedAt}</span>
+                    <span class="evased-badge">✅ ${req.evadedAt}</span>
                 </div>
             </div>
             <div class="request-info">
