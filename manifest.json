@@ -2,7 +2,7 @@
   "name": "Richieste Catalogo",
   "short_name": "Catalogo",
   "description": "Richieste di film e serie TV",
-  "start_url": "/",
+  "start_url": "./",
   "display": "standalone",
   "background_color": "#1a1a1a",
   "theme_color": "#1a1a1a",
