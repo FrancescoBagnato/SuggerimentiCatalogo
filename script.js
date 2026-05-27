@@ -703,8 +703,13 @@ function renderSuggested(list) {
             const isTop    = showMedals && rank <= 3;
             const medal    = isTop ? medals[idx] : '';
             const isOwn    = myNick && item.nick === myNick;
-            const myScore  = getSuggRating(item.id);
+            // Controlla sia localStorage che ratings Firebase (per chi ha votato al momento dell'inserimento)
+            const myScore  = getSuggRating(item.id) || (myNick && item.ratings && item.ratings[myNick]) || 0;
             const voted    = myScore > 0;
+            // Se il voto è in Firebase ma non in localStorage, salvalo
+            if (myNick && item.ratings && item.ratings[myNick] && !getSuggRating(item.id)) {
+                saveSuggRating(item.id, item.ratings[myNick]);
+            }
             const avgData  = item._avg;
 
             return `
@@ -718,13 +723,15 @@ function renderSuggested(list) {
                             : `<span class="sugg-avg sugg-avg-none">nessun voto</span>`}
                     </div>
                     <div class="sugg-score-wrap">
-                        ${isOwn
+                        ${isOwn && !voted
                             ? `<span class="sugg-own-badge">tuo</span>`
                             : voted
                                 ? `<span class="sugg-voted-score">${suggStarsHtml(myScore, 10)}<br><span style="font-size:10px;color:var(--teal-light)">Hai votato ${myScore}/10</span></span>`
-                                : `<div class="sugg-stars-input" data-id="${item.id}">
-                                    ${Array.from({length:10},(_,i)=>`<button class="ssb" data-score="${i+1}" title="${i+1}/10">★</button>`).join('')}
-                                   </div>`
+                                : isOwn
+                                    ? `<span class="sugg-own-badge">tuo</span>`
+                                    : `<div class="sugg-stars-input" data-id="${item.id}">
+                                        ${Array.from({length:10},(_,i)=>`<button class="ssb" data-score="${i+1}" title="${i+1}/10">★</button>`).join('')}
+                                       </div>`
                         }
                     </div>
                     ${(isAdminMode || item.nick === myNick) ? `<button class="sugg-delete" data-id="${item.id}" title="Rimuovi">✕</button>` : ''}
@@ -812,61 +819,84 @@ function renderSuggested(list) {
 // CONSIGLIATI — FORM SUBMIT
 // ============================================
 function initSuggFormStars() {
-    const wrap = document.getElementById('suggFormStars');
+    const wrap        = document.getElementById('suggFormStars');
     const ratingInput = document.getElementById('suggFormRating');
     if (!wrap) return;
 
     const pts = '12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26';
     let currentRating = 0;
+    let hoverRating   = 0;
 
-    function buildStars(active) {
-        return Array.from({length: 10}, (_, i) => {
-            const v   = i + 1;
-            const uid = 'sfs_' + i;
-            let fill = 'none', stroke = '#64748b';
-            if (active >= v)          { fill = '#fbbf24'; stroke = '#fbbf24'; }
-            else if (active >= v-0.5) { fill = 'none'; }  // half handled below
-            const isHalf = active >= v-0.5 && active < v;
-            if (isHalf) {
-                return `<button class="ssb" data-score="${v}" style="background:none;border:none;cursor:pointer;padding:1px">
-                    <svg width="18" height="18" viewBox="0 0 24 24">
-                        <defs><clipPath id="${uid}"><rect x="0" y="0" width="12" height="24"/></clipPath></defs>
-                        <polygon points="${pts}" fill="none" stroke="#64748b" stroke-width="1.5" stroke-linejoin="round"/>
-                        <polygon points="${pts}" fill="#fbbf24" stroke="#fbbf24" stroke-width="1.5" stroke-linejoin="round" clip-path="url(#${uid})"/>
-                    </svg></button>`;
-            }
-            return `<button class="ssb" data-score="${v}" style="background:none;border:none;cursor:pointer;padding:1px">
-                <svg width="18" height="18" viewBox="0 0 24 24">
-                    <polygon points="${pts}" fill="${fill}" stroke="${stroke}" stroke-width="1.5" stroke-linejoin="round"/>
-                </svg></button>`;
-        }).join('') + (active > 0 ? `<span style="font-size:13px;color:#cbd5e1;font-weight:600;margin-left:6px">${active.toFixed(1)}/10</span>
-            <button id="suggFormStarsClear" style="background:none;border:none;cursor:pointer;font-size:12px;color:#64748b;margin-left:4px" title="Azzera">✕</button>` : '');
+    // Crea i 10 bottoni stelle una volta sola
+    wrap.innerHTML = '';
+    const starBtns = Array.from({length: 10}, (_, i) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.dataset.idx = i;
+        btn.style.cssText = 'background:none;border:none;cursor:pointer;padding:1px;line-height:1';
+        wrap.appendChild(btn);
+        return btn;
+    });
+    const label = document.createElement('span');
+    label.style.cssText = 'font-size:13px;color:#cbd5e1;font-weight:600;margin-left:6px;display:none';
+    wrap.appendChild(label);
+    const clearBtn = document.createElement('button');
+    clearBtn.type = 'button';
+    clearBtn.textContent = '✕';
+    clearBtn.style.cssText = 'background:none;border:none;cursor:pointer;font-size:12px;color:#64748b;margin-left:4px;display:none';
+    wrap.appendChild(clearBtn);
+
+    function starSVG(type) {
+        const uid = 'sfs_' + Math.random().toString(36).slice(2,7);
+        if (type === 'full')
+            return `<svg width="18" height="18" viewBox="0 0 24 24"><polygon points="${pts}" fill="#fbbf24" stroke="#fbbf24" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
+        if (type === 'half')
+            return `<svg width="18" height="18" viewBox="0 0 24 24"><defs><clipPath id="${uid}"><rect x="0" y="0" width="12" height="24"/></clipPath></defs><polygon points="${pts}" fill="none" stroke="#64748b" stroke-width="1.5" stroke-linejoin="round"/><polygon points="${pts}" fill="#fbbf24" stroke="#fbbf24" stroke-width="1.5" stroke-linejoin="round" clip-path="url(#${uid})"/></svg>`;
+        return `<svg width="18" height="18" viewBox="0 0 24 24"><polygon points="${pts}" fill="none" stroke="#64748b" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
     }
 
-    function render(val) {
-        wrap.innerHTML = buildStars(val);
-        const btns = Array.from(wrap.querySelectorAll('.ssb'));
-        btns.forEach((btn, i) => {
-            btn.addEventListener('mousemove', e => {
-                const rect = btn.getBoundingClientRect();
-                const half = (e.clientX - rect.left) < rect.width / 2;
-                wrap.innerHTML = buildStars(half ? i + 0.5 : i + 1);
-                // Re-attach events on re-render è costoso, uso delegazione
-            });
-            btn.addEventListener('click', e => {
-                const rect = btn.getBoundingClientRect();
-                const half = (e.clientX - rect.left) < rect.width / 2;
-                currentRating = half ? i + 0.5 : i + 1;
-                if (ratingInput) ratingInput.value = currentRating;
-                render(currentRating);
-            });
+    function refreshStars(active) {
+        starBtns.forEach((btn, i) => {
+            const v = i + 1;
+            if (active >= v)          btn.innerHTML = starSVG('full');
+            else if (active >= v-0.5) btn.innerHTML = starSVG('half');
+            else                      btn.innerHTML = starSVG('empty');
         });
-        wrap.addEventListener('mouseleave', () => render(currentRating));
-        const clearBtn = wrap.querySelector('#suggFormStarsClear');
-        if (clearBtn) clearBtn.addEventListener('click', () => { currentRating = 0; if (ratingInput) ratingInput.value = 0; render(0); });
+        if (active > 0) {
+            label.textContent = active.toFixed(1) + '/10';
+            label.style.display = '';
+            clearBtn.style.display = '';
+        } else {
+            label.style.display = 'none';
+            clearBtn.style.display = 'none';
+        }
     }
 
-    render(0);
+    refreshStars(0);
+
+    starBtns.forEach((btn, i) => {
+        btn.addEventListener('mousemove', e => {
+            const rect = btn.getBoundingClientRect();
+            hoverRating = (e.clientX - rect.left) < rect.width / 2 ? i + 0.5 : i + 1;
+            refreshStars(hoverRating);
+        });
+        btn.addEventListener('mouseleave', () => {
+            hoverRating = 0;
+            refreshStars(currentRating);
+        });
+        btn.addEventListener('click', e => {
+            const rect = btn.getBoundingClientRect();
+            currentRating = (e.clientX - rect.left) < rect.width / 2 ? i + 0.5 : i + 1;
+            if (ratingInput) ratingInput.value = currentRating;
+            refreshStars(currentRating);
+        });
+    });
+
+    clearBtn.addEventListener('click', () => {
+        currentRating = 0;
+        if (ratingInput) ratingInput.value = 0;
+        refreshStars(0);
+    });
 }
 
 document.getElementById('suggSubmit').addEventListener('click', async () => {
