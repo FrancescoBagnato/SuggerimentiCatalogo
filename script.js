@@ -1155,57 +1155,72 @@ function buildCategoryHTML(catId, catName, dotClass, countId, foldersId, episode
 }
 
 function attachCatalogEvents() {
-    // Accordion
-    document.querySelectorAll('.catalog-cat-btn').forEach(btn => {
-        btn.setAttribute('aria-expanded', 'false');
-        btn.addEventListener('click', function() {
-            const id    = this.dataset.target;
-            const panel = document.getElementById(id);
-            const open  = panel.classList.contains('open');
-            document.querySelectorAll('.catalog-panel').forEach(p => p.classList.remove('open'));
-            document.querySelectorAll('.catalog-cat-btn').forEach(b => b.setAttribute('aria-expanded','false'));
-            if (!open) { panel.classList.add('open'); this.setAttribute('aria-expanded','true'); }
-        });
-    });
+    // Accordion — gestito dalla delegazione sopra
 
-    // Cartelle
+    // Cartelle — tutte chiuse di default
     document.querySelectorAll('.catalog-folder').forEach(folder => {
         folder.classList.remove('folder-open');
-        const ciMain   = folder.querySelector('.ci-main');
-        const toggle   = folder.querySelector('.ci-folder-toggle');
-
-        // Click sul toggle (▶) → espandi/chiudi
-        if (toggle) {
-            toggle.addEventListener('click', e => {
-                e.stopPropagation();
-                folder.classList.toggle('folder-open');
-                updateFolderUI(folder);
-            });
-        }
-
-        // Click sul nome della cartella → apri popup cartella
-        const nameSpan = ciMain.querySelector('.ci-name');
-        if (nameSpan) {
-            nameSpan.style.cursor = 'pointer';
-            nameSpan.addEventListener('click', e => {
-                e.stopPropagation();
-                openFolderPopup(folder);
-            });
-        }
     });
 
-    // Click sub-item
-    document.querySelectorAll('.catalog-subitem').forEach(li => {
-        li.addEventListener('click', e => {
-            e.stopPropagation();
-            openCatalogPopup(li.dataset.title, li.dataset.parent || null);
+    // Delegazione eventi sul container — funziona anche durante la ricerca
+    const catalogContainer = document.getElementById('catalogContainer');
+    if (catalogContainer) {
+        // Rimuovi vecchi listener clonando
+        const newContainer = catalogContainer.cloneNode(true);
+        catalogContainer.parentNode.replaceChild(newContainer, catalogContainer);
+
+        newContainer.addEventListener('click', e => {
+            // Toggle ▶ espandi/chiudi
+            const toggle = e.target.closest('.ci-folder-toggle');
+            if (toggle) {
+                e.stopPropagation();
+                const folder = toggle.closest('.catalog-folder');
+                if (folder) {
+                    folder.classList.toggle('folder-open');
+                    updateFolderUI(folder);
+                }
+                return;
+            }
+
+            // Click sul nome cartella → popup
+            const nameSpan = e.target.closest('.catalog-folder > .ci-main .ci-name');
+            if (nameSpan) {
+                e.stopPropagation();
+                const folder = nameSpan.closest('.catalog-folder');
+                if (folder) openFolderPopup(folder);
+                return;
+            }
+
+            // Click su sub-item
+            const subitem = e.target.closest('.catalog-subitem');
+            if (subitem) {
+                e.stopPropagation();
+                openCatalogPopup(subitem.dataset.title, subitem.dataset.parent || null);
+                return;
+            }
+
+            // Click su item singolo
+            const single = e.target.closest('.catalog-item:not(.catalog-folder):not(.catalog-subitem)');
+            if (single) {
+                openCatalogPopup(single.dataset.title);
+            }
         });
-    });
 
-    // Click item singolo
-    document.querySelectorAll('.catalog-item:not(.catalog-folder):not(.catalog-subitem)').forEach(li => {
-        li.addEventListener('click', () => openCatalogPopup(li.dataset.title));
-    });
+        // Ri-aggancia accordion categorie sul nuovo container
+        newContainer.querySelectorAll('.catalog-cat-btn').forEach(btn => {
+            btn.setAttribute('aria-expanded', 'false');
+            btn.addEventListener('click', function() {
+                const id    = this.dataset.target;
+                const panel = document.getElementById(id);
+                const open  = panel?.classList.contains('open');
+                newContainer.querySelectorAll('.catalog-panel').forEach(p => p.classList.remove('open'));
+                newContainer.querySelectorAll('.catalog-cat-btn').forEach(b => b.setAttribute('aria-expanded','false'));
+                if (!open && panel) { panel.classList.add('open'); this.setAttribute('aria-expanded','true'); }
+            });
+        });
+    }
+
+    // Click su item e sub-item — gestiti dalla delegazione sopra
 
     // Salva plainName per ricerca
     document.querySelectorAll('.catalog-item').forEach(li => {
