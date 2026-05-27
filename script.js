@@ -322,6 +322,147 @@ let popupCurrentTitle   = null;
 let popupSelectedStatus = null;
 let popupSelectedRating = 0;
 
+// ============================================
+// POPUP CARTELLA — applica a tutti i figli
+// ============================================
+function openFolderPopup(folder) {
+    const folderTitle = folder.dataset.title;
+    const subitems    = Array.from(folder.querySelectorAll('.catalog-subitem'));
+    if (!subitems.length) {
+        // Nessun figlio — apri popup normale sulla cartella stessa
+        openCatalogPopup(folderTitle);
+        return;
+    }
+
+    let selectedStatus = null;
+    let selectedRating = 0;
+
+    const overlay = document.getElementById('catalogPopupOverlay');
+    const pts = '12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26';
+
+    overlay.innerHTML = `
+        <div class="popup-box" id="popupBox">
+            <div class="popup-handle"></div>
+            <div class="popup-title">${esc(folderTitle)}</div>
+            <div class="popup-subtitle">Applica a tutti i ${subitems.length} titoli interni</div>
+
+            <div class="popup-nick-row">
+                <div class="field" style="flex:1;gap:5px">
+                    <label style="font-size:12px">Nickname</label>
+                    <input type="text" id="popupNick" placeholder="Lorem Ipsum" value="${esc(getNickname())}" autocomplete="off" maxlength="20">
+                </div>
+            </div>
+
+            <div class="popup-stars-label">Stato per tutti i titoli</div>
+            <div class="popup-status-row">
+                <button class="status-btn" data-status="seen"><span class="sb-icon">✅</span> Visto</button>
+                <button class="status-btn" data-status="watching"><span class="sb-icon">▶️</span> In corso</button>
+                <button class="status-btn status-btn-reset" data-status="none"><span class="sb-icon">✕</span> Resetta</button>
+            </div>
+
+            <div class="popup-stars-label">Voto uguale per tutti <span style="font-size:10px;color:var(--low);font-weight:400;text-transform:none;letter-spacing:0">(opzionale)</span></div>
+            <div class="popup-stars" id="popupStars">
+                ${Array.from({length:10}, (_, i) => {
+                    const val = i + 1;
+                    const uid = 'fp_' + Math.random().toString(36).slice(2,7);
+                    return '<button class="star-btn" data-val="' + val + '" title="' + val + '/10">'
+                        + '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">'
+                        + '<defs><clipPath id="' + uid + '"><rect x="0" y="0" width="12" height="24"/></clipPath></defs>'
+                        + '<polygon class="star-full" points="' + pts + '"/>'
+                        + '<polygon class="star-half" points="' + pts + '" clip-path="url(#' + uid + ')"/>'
+                        + '</svg></button>';
+                }).join('')}
+            </div>
+
+            <div class="popup-actions">
+                <button class="btn-popup-cancel" id="popupCancel">Annulla</button>
+                <button class="btn-popup-save" id="popupSave">Applica a tutti</button>
+            </div>
+        </div>`;
+
+    overlay.style.display = 'flex';
+    overlay.classList.remove('closing');
+
+    // Stelle
+    function applyStarClasses(btns, activeRating) {
+        btns.forEach(b => {
+            const v = parseFloat(b.dataset.val);
+            b.classList.remove('lit','half-lit');
+            if (activeRating >= v)            b.classList.add('lit');
+            else if (activeRating >= v - 0.5) b.classList.add('half-lit');
+        });
+    }
+    const starBtns = Array.from(overlay.querySelectorAll('.star-btn'));
+    starBtns.forEach(btn => {
+        btn.addEventListener('click', e => {
+            const v = parseFloat(btn.dataset.val);
+            const rect = btn.getBoundingClientRect();
+            const half = (e.clientX - rect.left) < rect.width / 2;
+            const chosen = half ? v - 0.5 : v;
+            selectedRating = (selectedRating === chosen) ? 0 : chosen;
+            applyStarClasses(starBtns, selectedRating);
+        });
+        btn.addEventListener('mousemove', e => {
+            const v = parseFloat(btn.dataset.val);
+            const rect = btn.getBoundingClientRect();
+            applyStarClasses(starBtns, (e.clientX - rect.left) < rect.width / 2 ? v - 0.5 : v);
+        });
+        btn.addEventListener('mouseleave', () => applyStarClasses(starBtns, selectedRating));
+    });
+
+    // Stato
+    overlay.querySelectorAll('.status-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const s = btn.dataset.status;
+            selectedStatus = s === 'none' ? null : s;
+            overlay.querySelectorAll('.status-btn').forEach(b => b.classList.remove('active-seen','active-watching'));
+            if (selectedStatus === 'seen')     btn.classList.add('active-seen');
+            if (selectedStatus === 'watching') btn.classList.add('active-watching');
+        });
+    });
+
+    // Salva — applica a tutti i figli
+    overlay.querySelector('#popupSave').addEventListener('click', async () => {
+        const nick = document.getElementById('popupNick').value.trim();
+        if (!nick) { alert('Inserisci il tuo nickname.'); return; }
+        saveNickname(nick);
+
+        const saveBtn = overlay.querySelector('#popupSave');
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Salvataggio…';
+
+        try {
+            const updates = {};
+            for (const li of subitems) {
+                const subTitle  = li.dataset.title;
+                const fbTitle   = folderTitle + ' — ' + subTitle;
+                const key       = titleToKey(fbTitle);
+                const userPath  = 'catalog/' + key + '/users/' + nick;
+                if (!selectedStatus) {
+                    await remove(ref(db, userPath));
+                } else {
+                    updates[userPath] = {
+                        status:    selectedStatus,
+                        rating:    selectedRating || null,
+                        updatedAt: Date.now()
+                    };
+                }
+            }
+            for (const [path, val] of Object.entries(updates)) {
+                await set(ref(db, path), val);
+            }
+            closePopup();
+        } catch(e) {
+            alert('Errore: ' + e.message);
+            saveBtn.disabled = false;
+            saveBtn.textContent = 'Applica a tutti';
+        }
+    });
+
+    overlay.querySelector('#popupCancel').addEventListener('click', closePopup);
+    overlay.addEventListener('click', e => { if (e.target === overlay) closePopup(); });
+}
+
 function openCatalogPopup(title, parentTitle = null) {
     // Per i sub-item (stagioni), usa 'Parent — Titolo' come chiave Firebase
     const firebaseTitle = parentTitle ? parentTitle + ' — ' + title : title;
@@ -1030,11 +1171,27 @@ function attachCatalogEvents() {
     // Cartelle
     document.querySelectorAll('.catalog-folder').forEach(folder => {
         folder.classList.remove('folder-open');
-        folder.querySelector('.ci-main').addEventListener('click', e => {
-            e.stopPropagation();
-            folder.classList.toggle('folder-open');
-            updateFolderUI(folder);
-        });
+        const ciMain   = folder.querySelector('.ci-main');
+        const toggle   = folder.querySelector('.ci-folder-toggle');
+
+        // Click sul toggle (▶) → espandi/chiudi
+        if (toggle) {
+            toggle.addEventListener('click', e => {
+                e.stopPropagation();
+                folder.classList.toggle('folder-open');
+                updateFolderUI(folder);
+            });
+        }
+
+        // Click sul nome della cartella → apri popup cartella
+        const nameSpan = ciMain.querySelector('.ci-name');
+        if (nameSpan) {
+            nameSpan.style.cursor = 'pointer';
+            nameSpan.addEventListener('click', e => {
+                e.stopPropagation();
+                openFolderPopup(folder);
+            });
+        }
     });
 
     // Click sub-item
@@ -1083,13 +1240,30 @@ function attachCatalogEvents() {
                     const plain = li.dataset.plainName || '';
                     const match = plain.toLowerCase().includes(q);
                     li.classList.toggle('hidden', !match);
+                    const nameEl = li.querySelector('.ci-name');
+                    if (!nameEl) return;
                     if (match) {
                         catHasMatch = true; anyVisible = true;
-                        const idx = plain.toLowerCase().indexOf(q);
-                        li.querySelector('.ci-name').innerHTML =
-                            esc(plain.slice(0,idx)) + '<mark>' + esc(plain.slice(idx, idx+q.length)) + '</mark>' + esc(plain.slice(idx+q.length));
+                        const idx2 = plain.toLowerCase().indexOf(q);
+                        nameEl.innerHTML =
+                            esc(plain.slice(0,idx2)) + '<mark>' + esc(plain.slice(idx2, idx2+q.length)) + '</mark>' + esc(plain.slice(idx2+q.length));
+                        // Se è un sub-item, apri la cartella padre
+                        if (li.classList.contains('catalog-subitem')) {
+                            const folder = li.closest('.catalog-folder');
+                            if (folder) folder.classList.add('folder-open');
+                        }
                     } else {
-                        li.querySelector('.ci-name').innerHTML = esc(plain);
+                        nameEl.innerHTML = esc(plain);
+                    }
+                });
+                // Apri anche le cartelle che hanno sub-item visibili
+                cat.querySelectorAll('.catalog-folder').forEach(folder => {
+                    const hasVisible = Array.from(folder.querySelectorAll('.catalog-subitem'))
+                        .some(s => !s.classList.contains('hidden'));
+                    if (hasVisible) {
+                        folder.classList.add('folder-open');
+                        folder.classList.remove('hidden');
+                        catHasMatch = true; anyVisible = true;
                     }
                 });
                 panel.classList.toggle('open', catHasMatch);
