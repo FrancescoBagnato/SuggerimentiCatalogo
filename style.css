@@ -1083,3 +1083,12 @@ input[type="search"]::placeholder { color: rgba(255,255,255,.35); }
     font-size: 12px !important;
 }
 .ap-btn-import:hover { background: var(--teal-dim) !important; }
+
+/* Stelle nel form consigliati */
+.sugg-form-stars {
+    display: flex; align-items: center; flex-wrap: wrap; gap: 1px;
+    min-height: 32px; padding: 4px 0;
+}
+.sugg-form-stars-hint {
+    font-size: 12px; color: var(--low); font-style: italic;
+}
