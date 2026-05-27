@@ -978,7 +978,9 @@ function renderCatalogFromFirebase() {
 }
 
 function buildCategoryHTML(catId, catName, dotClass, countId, foldersId, episodesId, items) {
-    const listHTML = items.map(item => {
+    // Ordina items alfabeticamente per titolo (cartelle e singoli misti)
+    const sortedItems = [...items].sort((a, b) => a.title.localeCompare(b.title, 'it', {sensitivity:'base'}));
+    const listHTML = sortedItems.map(item => {
         const safe = esc(item.title);
         if (item.type === 'folder') {
             const subsHTML = (item.children || []).map(sub => {
