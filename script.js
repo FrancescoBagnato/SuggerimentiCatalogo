@@ -371,7 +371,7 @@ function openFolderPopup(folder) {
         <div class="popup-box" id="popupBox">
             <div class="popup-handle"></div>
             <div class="popup-title">${esc(folderTitle)}</div>
-            <div class="popup-subtitle">Applica a tutti i ${subitems.length} titoli interni</div>
+            <div class="popup-subtitle">Applica a tutto il contenuto della cartella</div>
 
             <div class="popup-nick-row">
                 <div class="field" style="flex:1;gap:5px">
