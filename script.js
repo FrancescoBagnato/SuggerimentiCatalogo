@@ -405,11 +405,35 @@ function openFolderPopup(folder) {
                 <button class="btn-popup-cancel" id="popupCancel">Annulla</button>
                 <button class="btn-popup-save" id="popupSave">Applica a tutti</button>
             </div>
+            <button class="btn-watchlist-toggle" id="popupFolderWatchlist">♡ Aggiungi cartella alla watchlist</button>
         </div>`;
 
     overlay.style.display = 'flex';
     overlay.classList.remove('closing');
     addSwipeToClose(overlay);
+
+    // Stato cuore watchlist cartella
+    function refreshFolderWlBtn() {
+        const btn = overlay.querySelector('#popupFolderWatchlist');
+        if (!btn) return;
+        const inWl = isInWatchlist(folderTitle);
+        btn.textContent = inWl ? '♥ In watchlist' : '♡ Aggiungi cartella alla watchlist';
+        btn.classList.toggle('btn-watchlist-toggle-active', inWl);
+    }
+    refreshFolderWlBtn();
+
+    overlay.querySelector('#popupFolderWatchlist').addEventListener('click', async () => {
+        const nick = document.getElementById('popupNick').value.trim();
+        if (!nick) { alert('Inserisci prima il tuo nickname.'); return; }
+        saveNickname(nick);
+        const btn  = overlay.querySelector('#popupFolderWatchlist');
+        btn.disabled = true; btn.textContent = 'Salvataggio…';
+        try {
+            await toggleWatchlist(folderTitle, folderTitle);
+            refreshFolderWlBtn();
+        } catch(e) { alert('Errore: ' + e.message); }
+        finally { btn.disabled = false; }
+    });
 
     // Stelle
     function applyStarClasses(btns, activeRating) {
@@ -834,6 +858,43 @@ onValue(suggestedRef, snap => {
 });
 
 // ============================================
+// POPUP VOTANTI CONSIGLIATI
+// ============================================
+function openSuggVotersPopup(item) {
+    const ratings = item.ratings ? Object.entries(item.ratings) : [];
+    if (!ratings.length) return;
+
+    // Ordina per voto decrescente
+    ratings.sort((a, b) => b[1] - a[1]);
+
+    const overlay = document.getElementById('catalogPopupOverlay');
+    overlay.innerHTML = `
+        <div class="popup-box">
+            <div class="popup-handle"></div>
+            <div class="popup-title">${esc(item.title)}</div>
+            <div class="popup-subtitle">Voti ricevuti — ${ratings.length} vot${ratings.length === 1 ? 'o' : 'i'}</div>
+            <div class="voters-list">
+                ${ratings.map(([nick, score]) => `
+                    <div class="voter-row">
+                        <div class="voter-avatar">${esc(nick[0].toUpperCase())}</div>
+                        <span class="voter-nick">${esc(nick)}</span>
+                        <span class="voter-score">${suggStarsHtml(score, 11)}</span>
+                        <span class="voter-num">${score}/10</span>
+                    </div>`).join('')}
+            </div>
+            <div class="popup-actions" style="margin-top:16px">
+                <button class="btn-popup-cancel" id="votersClose" style="flex:1">Chiudi</button>
+            </div>
+        </div>`;
+
+    overlay.style.display = 'flex';
+    overlay.classList.remove('closing');
+    addSwipeToClose(overlay);
+    overlay.querySelector('#votersClose').addEventListener('click', closePopup);
+    overlay.addEventListener('click', e => { if (e.target === overlay) closePopup(); });
+}
+
+// ============================================
 // POPUP VOTO CONSIGLIATI
 // ============================================
 function openSuggVotePopup(id, title) {
@@ -854,7 +915,7 @@ function openSuggVotePopup(id, title) {
                 </div>
             </div>
 
-            <div class="popup-stars-label">Il tuo voto</div>
+            <div class="popup-stars-label">Il tuo voto <span style="font-size:10px;color:var(--low);font-weight:400;text-transform:none;letter-spacing:0">½ cliccando la metà sinistra</span></div>
             <div class="popup-stars" id="svpStars">
                 ${Array.from({length:10}, (_, i) => {
                     const val = i + 1;
@@ -1028,7 +1089,7 @@ function renderSuggested(list) {
                     <div class="sugg-item-bottom">
                         <div class="sugg-avg-wrap">
                             ${avgData
-                                ? `<span class="sugg-avg">${suggStarsHtml(avgData.rounded, 11)} <span class="sugg-avg-num">${avgData.avg.toFixed(1)}/10</span> <span class="sugg-avg-ct">(${avgData.count} vot${avgData.count === 1 ? 'o' : 'i'})</span></span>`
+                                ? `<span class="sugg-avg">${suggStarsHtml(avgData.rounded, 11)} <span class="sugg-avg-num">${avgData.avg.toFixed(1)}/10</span> <button class="sugg-votes-btn" data-id="${item.id}" title="Vedi chi ha votato">(${avgData.count} vot${avgData.count === 1 ? 'o' : 'i'})</button></span>`
                                 : `<span class="sugg-avg sugg-avg-none">nessun voto ancora</span>`}
                         </div>
                         <div class="sugg-score-wrap">
@@ -1058,6 +1119,16 @@ function renderSuggested(list) {
             </div>`).join('');
 
     }
+
+    // Listener contatore voti — mostra chi ha votato
+    el.querySelectorAll('.sugg-votes-btn').forEach(btn => {
+        btn.addEventListener('click', e => {
+            e.stopPropagation();
+            const item = allSuggested.find(s => s.id === btn.dataset.id);
+            if (!item) return;
+            openSuggVotersPopup(item);
+        });
+    });
 
     // Listener bottone Vota — apre popup stelline
     el.querySelectorAll('.btn-sugg-vote-open').forEach(btn => {
