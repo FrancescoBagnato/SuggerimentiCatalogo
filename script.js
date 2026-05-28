@@ -1541,6 +1541,25 @@ function attachCatalogEvents() {
     // Aggiorna voti/stati dal catalogData Firebase
     document.querySelectorAll('.catalog-item:not(.catalog-folder)').forEach(li => updateCatalogItemUI(li));
     document.querySelectorAll('.catalog-folder').forEach(folder => updateFolderUI(folder));
+
+    // Tap su avatar → mostra nome completo (tooltip mobile)
+    initAvatarTooltips(document.getElementById('catalogContainer'));
+}
+
+function initAvatarTooltips(container) {
+    if (!container) return;
+    container.addEventListener('click', e => {
+        const avatar = e.target.closest('.ci-avatar');
+        if (!avatar) {
+            // Chiudi tutti i tooltip aperti
+            document.querySelectorAll('.ci-avatar.tooltip-visible').forEach(a => a.classList.remove('tooltip-visible'));
+            return;
+        }
+        e.stopPropagation();
+        const isVisible = avatar.classList.contains('tooltip-visible');
+        document.querySelectorAll('.ci-avatar.tooltip-visible').forEach(a => a.classList.remove('tooltip-visible'));
+        if (!isVisible) avatar.classList.add('tooltip-visible');
+    });
 }
 
 function updateAllCategoryCounters() {
