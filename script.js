@@ -409,6 +409,7 @@ function openFolderPopup(folder) {
 
     overlay.style.display = 'flex';
     overlay.classList.remove('closing');
+    addSwipeToClose(overlay);
 
     // Stelle
     function applyStarClasses(btns, activeRating) {
@@ -590,6 +591,7 @@ function openCatalogPopup(title, parentTitle = null) {
 
     overlay.style.display = 'flex';
     overlay.classList.remove('closing');
+    addSwipeToClose(overlay);
 
     // Stelle
     function applyStarClasses(btns, activeRating) {
@@ -653,6 +655,41 @@ function closePopup() {
     const overlay = document.getElementById('catalogPopupOverlay');
     overlay.classList.add('closing');
     setTimeout(() => { overlay.style.display = 'none'; overlay.classList.remove('closing'); }, 220);
+}
+
+function addSwipeToClose(overlay) {
+    const box = overlay.querySelector('.popup-box');
+    if (!box) return;
+    let startY = 0, startX = 0, isDragging = false;
+
+    box.addEventListener('touchstart', e => {
+        // Solo se il tocco inizia nella zona superiore (handle o titolo)
+        const touch = e.touches[0];
+        startY = touch.clientY;
+        startX = touch.clientX;
+        isDragging = true;
+        box.style.transition = 'none';
+    }, { passive: true });
+
+    box.addEventListener('touchmove', e => {
+        if (!isDragging) return;
+        const dy = e.touches[0].clientY - startY;
+        const dx = Math.abs(e.touches[0].clientX - startX);
+        if (dy > 0 && dx < 50) {
+            box.style.transform = `translateY(${dy}px)`;
+            box.style.opacity   = Math.max(0, 1 - dy / 300);
+        }
+    }, { passive: true });
+
+    box.addEventListener('touchend', e => {
+        if (!isDragging) return;
+        isDragging = false;
+        const dy = e.changedTouches[0].clientY - startY;
+        box.style.transition = '';
+        box.style.transform  = '';
+        box.style.opacity    = '';
+        if (dy > 80) closePopup();
+    }, { passive: true });
 }
 
 async function saveCatalogEntry() {
@@ -839,6 +876,7 @@ function openSuggVotePopup(id, title) {
 
     overlay.style.display = 'flex';
     overlay.classList.remove('closing');
+    addSwipeToClose(overlay);
 
     // Stelle
     function applyStars(btns, val) {
