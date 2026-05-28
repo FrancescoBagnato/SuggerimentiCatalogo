@@ -1315,11 +1315,11 @@ input[type="search"]::placeholder { color: rgba(255,255,255,.35); }
     cursor: pointer;
 }
 .ci-avatar::after {
-    content: attr(title);
+    content: attr(data-tooltip);
     position: absolute;
-    bottom: calc(100% + 6px);
-    left: 50%;
-    transform: translateX(-50%);
+    top: calc(100% + 6px);
+    left: 0;
+    transform: none;
     background: var(--surface3);
     color: var(--hi);
     font-size: 11px;
@@ -1338,4 +1338,10 @@ input[type="search"]::placeholder { color: rgba(255,255,255,.35); }
 .ci-avatar:focus::after,
 .ci-avatar.tooltip-visible::after {
     opacity: 1;
+}
+
+/* Tooltip allineato a destra se vicino al bordo */
+.ci-avatar.tooltip-right-align::after {
+    left: auto;
+    right: 0;
 }
