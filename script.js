@@ -851,27 +851,33 @@ function renderSuggested(list) {
 
             return `
                 <div class="sugg-item ${isTop ? 'sugg-top sugg-top-' + rank : ''}">
-                    ${medal ? `<span class="sugg-medal">${medal}</span>` : `<span class="sugg-rank">${rank}</span>`}
-                    <div class="sugg-info">
-                        <span class="sugg-title">${esc(item.title)}</span>
-                        <span class="sugg-by">${esc(item.nick)}</span>
-                        ${avgData
-                            ? `<span class="sugg-avg">${suggStarsHtml(avgData.rounded, 9)} <span class="sugg-avg-num">${avgData.avg.toFixed(1)}</span> <span class="sugg-avg-ct">(${avgData.count} vot${avgData.count === 1 ? 'o' : 'i'})</span></span>`
-                            : `<span class="sugg-avg sugg-avg-none">nessun voto</span>`}
+                    <div class="sugg-item-top">
+                        ${medal ? `<span class="sugg-medal">${medal}</span>` : `<span class="sugg-rank">${rank}</span>`}
+                        <div class="sugg-title-wrap">
+                            <span class="sugg-title">${esc(item.title)}</span>
+                            <span class="sugg-by">${esc(item.nick)}</span>
+                        </div>
+                        ${(isAdminMode || item.nick === myNick) ? `<button class="sugg-delete" data-id="${item.id}" title="Rimuovi">✕</button>` : ''}
                     </div>
-                    <div class="sugg-score-wrap">
-                        ${isOwn && !voted
-                            ? `<span class="sugg-own-badge">tuo</span>`
-                            : voted
-                                ? `<span class="sugg-voted-score">${suggStarsHtml(myScore, 10)}<br><span style="font-size:10px;color:var(--teal-light)">Hai votato ${myScore}/10</span></span>`
-                                : isOwn
-                                    ? `<span class="sugg-own-badge">tuo</span>`
-                                    : `<div class="sugg-stars-input" data-id="${item.id}">
-                                        ${Array.from({length:10},(_,i)=>`<button class="ssb" data-score="${i+1}" title="${i+1}/10">★</button>`).join('')}
-                                       </div>`
-                        }
+                    <div class="sugg-item-bottom">
+                        <div class="sugg-avg-wrap">
+                            ${avgData
+                                ? `<span class="sugg-avg">${suggStarsHtml(avgData.rounded, 11)} <span class="sugg-avg-num">${avgData.avg.toFixed(1)}/10</span> <span class="sugg-avg-ct">(${avgData.count} vot${avgData.count === 1 ? 'o' : 'i'})</span></span>`
+                                : `<span class="sugg-avg sugg-avg-none">nessun voto ancora</span>`}
+                        </div>
+                        <div class="sugg-score-wrap">
+                            ${isOwn && !voted
+                                ? `<span class="sugg-own-badge">tuo</span>`
+                                : voted
+                                    ? `<span class="sugg-voted-score"><span style="font-size:11px;color:var(--teal-light)">Voto: ${myScore}/10</span></span>`
+                                    : isOwn
+                                        ? `<span class="sugg-own-badge">tuo</span>`
+                                        : `<div class="sugg-stars-input" data-id="${item.id}">
+                                            ${Array.from({length:10},(_,i)=>`<button class="ssb" data-score="${i+1}" title="${i+1}/10">★</button>`).join('')}
+                                           </div>`
+                            }
+                        </div>
                     </div>
-                    ${(isAdminMode || item.nick === myNick) ? `<button class="sugg-delete" data-id="${item.id}" title="Rimuovi">✕</button>` : ''}
                 </div>`;
         }).join('');
 
