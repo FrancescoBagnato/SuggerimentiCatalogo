@@ -70,6 +70,17 @@ function saveSuggRating(id, score) { const r = getSuggRatings(); r[id] = score; 
 function getSuggRating(id)         { return getSuggRatings()[id] || 0; }
 function hasSuggVoted(id)          { return !!getSuggRatings()[id]; }
 
+function showFormError(formId, msg) {
+    const old = document.querySelector('#' + formId + ' .form-error');
+    if (old) old.remove();
+    const el = document.createElement('div');
+    el.className = 'form-error';
+    el.textContent = '⚠ ' + msg;
+    const form = document.getElementById(formId);
+    if (form) form.insertBefore(el, form.firstChild);
+    setTimeout(() => el.remove(), 3500);
+}
+
 function showToast(msg = 'Fatto!') {
     const old = document.querySelector('.success-toast');
     if (old) old.remove();
@@ -268,10 +279,26 @@ document.getElementById('requestForm').addEventListener('submit', async function
     const btn = this.querySelector('.btn-submit');
     btn.disabled = true;
     btn.querySelector('.btn-submit-text').textContent = 'Invio…';
+    const titleVal     = document.getElementById('title').value.trim();
+    const typeVal      = document.getElementById('type').value;
+    const requesterVal = document.getElementById('requester').value.trim();
+
+    // Validazione campi obbligatori
+    let reqError = '';
+    if (!titleVal)     reqError = 'Inserisci il titolo.';
+    else if (!typeVal) reqError = 'Seleziona il tipo (Film o Serie TV).';
+    else if (!requesterVal) reqError = 'Inserisci il tuo nickname.';
+    if (reqError) {
+        showFormError('requestForm', reqError);
+        btn.disabled = false;
+        btn.querySelector('.btn-submit-text').textContent = 'Invia richiesta';
+        return;
+    }
+
     const payload = {
-        title:     document.getElementById('title').value.trim(),
-        type:      document.getElementById('type').value,
-        requester: document.getElementById('requester').value.trim(),
+        title:     titleVal,
+        type:      typeVal,
+        requester: requesterVal,
         notes:     document.getElementById('notes').value.trim(),
         date:      new Date().toLocaleDateString('it-IT', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }),
         timestamp: Date.now()
@@ -1153,8 +1180,16 @@ document.getElementById('suggSubmit').addEventListener('click', async () => {
     const title    = titleEl.value.trim();
     const nick     = nickEl.value.trim();
     const rating   = parseFloat(ratingEl?.value || 0) || 0;
-    if (!title) { titleEl.focus(); return; }
-    if (!nick)  { nickEl.focus();  return; }
+
+    // Validazione campi obbligatori
+    let suggError = '';
+    if (!title)  suggError = 'Inserisci il titolo del consiglio.';
+    else if (!nick)   suggError = 'Inserisci il tuo nickname.';
+    else if (!rating) suggError = 'Inserisci il tuo voto (1–10).';
+    if (suggError) {
+        showFormError('suggForm', suggError);
+        return;
+    }
     saveNickname(nick);
     const btn = document.getElementById('suggSubmit');
     btn.disabled = true;
