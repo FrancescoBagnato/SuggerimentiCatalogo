@@ -1185,3 +1185,40 @@ input[type="search"]::placeholder { color: rgba(255,255,255,.35); }
     border-top: 1px solid var(--border);
 }
 .sugg-avg-wrap { display: flex; align-items: center; flex: 1; min-width: 0; }
+
+/* ── Bottone Vota nella classifica ── */
+.btn-sugg-vote-open {
+    font-family: var(--font-sans); font-size: 13px; font-weight: 700;
+    padding: 8px 18px; border-radius: var(--r-pill);
+    background: var(--teal-dim); border: 1.5px solid var(--teal-dim2);
+    color: var(--teal-light); cursor: pointer; white-space: nowrap;
+    transition: background .15s, transform .1s;
+}
+.btn-sugg-vote-open:hover { background: rgba(42,157,143,.3); transform: scale(1.03); }
+.btn-sugg-vote-open:active { transform: scale(.97); }
+
+/* ── Avatar nella cartella (solo iniziali, niente colore sfondo) ── */
+.ci-folder-avatars {
+    display: flex; gap: 4px; flex-wrap: wrap;
+    padding: 0 12px 8px;
+}
+.ci-folder-avatars .ci-avatar {
+    background: none !important;
+    border-color: var(--border2) !important;
+    font-size: 9px;
+}
+.ci-folder-avatars .ci-avatar.seen    { color: var(--green); border-color: var(--green-brd) !important; }
+.ci-folder-avatars .ci-avatar.watching{ color: var(--yellow); border-color: var(--yellow-brd) !important; }
+
+/* ── Area tocco cartella più grande ── */
+.catalog-folder > .ci-main {
+    padding: 12px 4px;    /* più spazio verticale per il tocco */
+    min-height: 52px;
+    align-items: center;
+}
+.ci-folder-toggle {
+    /* area tocco aumentata con padding invisibile */
+    padding: 12px 8px;
+    margin: -12px -4px;
+    font-size: 13px;
+}
