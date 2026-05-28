@@ -697,13 +697,9 @@ function updateFolderUI(folder) {
     }
     starsEl.textContent = avg ? avg.toFixed(1) + '★' : '';
 
-    // Avatar (visti/in corso) sulla cartella
-    let avatarDiv = folder.querySelector(':scope > .ci-avatars');
-    if (!avatarDiv) { avatarDiv = document.createElement('div'); avatarDiv.className = 'ci-avatars'; folder.insertBefore(avatarDiv, folder.querySelector('.ci-folder-list')); }
-    avatarDiv.innerHTML = [
-        ...[...seenNicks].map(n => `<div class="ci-avatar seen" title="${esc(n)} — Visto">${esc(n[0].toUpperCase())}</div>`),
-        ...[...watchNicks].map(n => `<div class="ci-avatar watching" title="${esc(n)} — In corso">${esc(n[0].toUpperCase())}</div>`)
-    ].join('');
+    // Rimuovi eventuali avatar dalla cartella (non devono colorarla)
+    const avatarDiv = folder.querySelector(':scope > .ci-avatars');
+    if (avatarDiv) avatarDiv.innerHTML = '';
 }
 
 // ============================================
@@ -860,7 +856,7 @@ function renderSuggested(list) {
                         <span class="sugg-title">${esc(item.title)}</span>
                         <span class="sugg-by">${esc(item.nick)}</span>
                         ${avgData
-                            ? `<span class="sugg-avg">${suggStarsHtml(avgData.rounded)} <span class="sugg-avg-num">${avgData.avg.toFixed(1)}/10</span> <span class="sugg-avg-ct">(${avgData.count} vot${avgData.count === 1 ? 'o' : 'i'})</span></span>`
+                            ? `<span class="sugg-avg">${suggStarsHtml(avgData.rounded, 9)} <span class="sugg-avg-num">${avgData.avg.toFixed(1)}</span> <span class="sugg-avg-ct">(${avgData.count} vot${avgData.count === 1 ? 'o' : 'i'})</span></span>`
                             : `<span class="sugg-avg sugg-avg-none">nessun voto</span>`}
                     </div>
                     <div class="sugg-score-wrap">
