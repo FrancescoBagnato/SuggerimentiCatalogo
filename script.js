@@ -58,6 +58,12 @@ function esc(text) {
     d.textContent = text ?? '';
     return d.innerHTML;
 }
+// Decodifica entità HTML (es. &amp; → &) per mostrare testo visibile
+function unesc(text) {
+    const d = document.createElement('div');
+    d.innerHTML = text ?? '';
+    return d.textContent;
+}
 function titleToKey(title) { return title.replace(/[.#$\/\[\]]/g, '_'); }
 
 function checkAdmin()  { return localStorage.getItem('isAdmin') === 'true'; }
@@ -825,7 +831,7 @@ function updateCatalogItemUI(li) {
     const plainName = nameSpan.textContent;
 
     ciMain.innerHTML = `
-        <span class="ci-name">${esc(plainName)}</span>
+        <span class="ci-name">${plainName}</span>
         ${avg ? `<span class="ci-stars">${avg.toFixed(1)}★</span>` : ''}
     `;
 
@@ -1372,18 +1378,20 @@ function buildCategoryHTML(catId, catName, dotClass, countId, foldersId, episode
     // Ordina items alfabeticamente per titolo (cartelle e singoli misti)
     const sortedItems = [...items].sort((a, b) => a.title.localeCompare(b.title, 'it', {sensitivity:'base'}));
     const listHTML = sortedItems.map(item => {
-        const safe = esc(item.title);
+        const safe    = esc(item.title);      // per attributi HTML
+        const display = item.title;            // testo visibile raw
         if (item.type === 'folder') {
             const subsHTML = (item.children || []).map(sub => {
-                const safeSub = esc(sub);
-                return `<li class="catalog-item catalog-subitem" data-title="${safeSub}" data-parent="${safe}"><div class="ci-main"><span class="ci-name">${safeSub}</span></div></li>`;
+                const safeSub    = esc(sub);
+                const displaySub = sub;
+                return `<li class="catalog-item catalog-subitem" data-title="${safeSub}" data-parent="${safe}"><div class="ci-main"><span class="ci-name">${displaySub}</span></div></li>`;
             }).join('');
             return `<li class="catalog-item catalog-folder" data-title="${safe}" data-type="folder">
-                <div class="ci-main"><span class="ci-name">${safe}</span><span class="ci-folder-toggle">▶</span></div>
+                <div class="ci-main"><span class="ci-name">${display}</span><span class="ci-folder-toggle">▶</span></div>
                 <ul class="ci-folder-list">${subsHTML}</ul>
             </li>`;
         } else {
-            return `<li class="catalog-item" data-title="${safe}"><div class="ci-main"><span class="ci-name">${safe}</span></div></li>`;
+            return `<li class="catalog-item" data-title="${safe}"><div class="ci-main"><span class="ci-name">${display}</span></div></li>`;
         }
     }).join('');
 
