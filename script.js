@@ -686,7 +686,7 @@ function updateFolderUI(folder) {
     const plainName = nameSpan.textContent;
     const toggle = folder.classList.contains('folder-open') ? '▼' : '▶';
 
-    // Aggiorna solo stelle media (non toccare il toggle che è gestito da CSS)
+    // Aggiorna stelle media
     let starsEl = ciMain.querySelector('.ci-stars');
     if (!starsEl) {
         starsEl = document.createElement('span');
@@ -697,9 +697,25 @@ function updateFolderUI(folder) {
     }
     starsEl.textContent = avg ? avg.toFixed(1) + '★' : '';
 
-    // Rimuovi eventuali avatar dalla cartella (non devono colorarla)
-    const avatarDiv = folder.querySelector(':scope > .ci-avatars');
-    if (avatarDiv) avatarDiv.innerHTML = '';
+    // Avatar (iniziali) nella cartella — solo icone, niente colore di sfondo
+    let avatarDiv = folder.querySelector(':scope > .ci-folder-avatars');
+    if (!avatarDiv) {
+        avatarDiv = document.createElement('div');
+        avatarDiv.className = 'ci-folder-avatars';
+        // Inserisci dopo ci-main
+        const folderList = folder.querySelector('.ci-folder-list');
+        folder.insertBefore(avatarDiv, folderList);
+    }
+    const allSeen    = [...seenNicks];
+    const allWatch   = [...watchNicks];
+    if (allSeen.length || allWatch.length) {
+        avatarDiv.innerHTML = [
+            ...allSeen.map(n  => `<div class="ci-avatar seen"    title="${esc(n)} — Visto">${esc(n[0].toUpperCase())}</div>`),
+            ...allWatch.map(n => `<div class="ci-avatar watching" title="${esc(n)} — In corso">${esc(n[0].toUpperCase())}</div>`)
+        ].join('');
+    } else {
+        avatarDiv.innerHTML = '';
+    }
 }
 
 // ============================================
@@ -752,6 +768,91 @@ onValue(suggestedRef, snap => {
     renderSuggested(allSuggested);
     if (window._apRenderSugg) window._apRenderSugg();
 });
+
+// ============================================
+// POPUP VOTO CONSIGLIATI
+// ============================================
+function openSuggVotePopup(id, title) {
+    const overlay = document.getElementById('catalogPopupOverlay');
+    const pts = '12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26';
+    let selectedScore = 0;
+
+    overlay.innerHTML = `
+        <div class="popup-box">
+            <div class="popup-handle"></div>
+            <div class="popup-title">${esc(title)}</div>
+            <div class="popup-subtitle">Dai il tuo voto (1–10)</div>
+
+            <div class="popup-nick-row">
+                <div class="field" style="flex:1;gap:5px">
+                    <label style="font-size:12px">Nickname</label>
+                    <input type="text" id="svpNick" placeholder="Lorem Ipsum" value="${esc(getNickname())}" autocomplete="off" maxlength="20">
+                </div>
+            </div>
+
+            <div class="popup-stars-label">Il tuo voto</div>
+            <div class="popup-stars" id="svpStars">
+                ${Array.from({length:10}, (_, i) => {
+                    const val = i + 1;
+                    const uid = 'svp_' + Math.random().toString(36).slice(2,7);
+                    return '<button class="star-btn" data-val="' + val + '" title="' + val + '/10">'
+                        + '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">'
+                        + '<defs><clipPath id="' + uid + '"><rect x="0" y="0" width="12" height="24"/></clipPath></defs>'
+                        + '<polygon class="star-full" points="' + pts + '"/>'
+                        + '<polygon class="star-half" points="' + pts + '" clip-path="url(#' + uid + ')"/>'
+                        + '</svg></button>';
+                }).join('')}
+            </div>
+
+            <div class="popup-actions">
+                <button class="btn-popup-cancel" id="svpCancel">Annulla</button>
+                <button class="btn-popup-save" id="svpSave" disabled>Salva voto</button>
+            </div>
+        </div>`;
+
+    overlay.style.display = 'flex';
+    overlay.classList.remove('closing');
+
+    // Stelle
+    function applyStars(btns, val) {
+        btns.forEach(b => {
+            const v = parseFloat(b.dataset.val);
+            b.classList.remove('lit','half-lit');
+            if (val >= v)          b.classList.add('lit');
+            else if (val >= v-0.5) b.classList.add('half-lit');
+        });
+    }
+    const starBtns = Array.from(overlay.querySelectorAll('.star-btn'));
+    starBtns.forEach(btn => {
+        btn.addEventListener('click', e => {
+            const v = parseFloat(btn.dataset.val);
+            const half = (e.clientX - btn.getBoundingClientRect().left) < btn.getBoundingClientRect().width / 2;
+            selectedScore = half ? v - 0.5 : v;
+            applyStars(starBtns, selectedScore);
+            overlay.querySelector('#svpSave').disabled = false;
+        });
+        btn.addEventListener('mousemove', e => {
+            const v = parseFloat(btn.dataset.val);
+            const half = (e.clientX - btn.getBoundingClientRect().left) < btn.getBoundingClientRect().width / 2;
+            applyStars(starBtns, half ? v - 0.5 : v);
+        });
+        btn.addEventListener('mouseleave', () => applyStars(starBtns, selectedScore));
+    });
+
+    overlay.querySelector('#svpSave').addEventListener('click', async () => {
+        const nick = overlay.querySelector('#svpNick').value.trim();
+        if (!nick) { alert('Inserisci il tuo nickname.'); return; }
+        if (!selectedScore) { alert('Seleziona un voto.'); return; }
+        saveNickname(nick);
+        const saveBtn = overlay.querySelector('#svpSave');
+        saveBtn.disabled = true; saveBtn.textContent = 'Salvataggio…';
+        await voteSuggested(id, selectedScore);
+        closePopup();
+    });
+
+    overlay.querySelector('#svpCancel').addEventListener('click', closePopup);
+    overlay.addEventListener('click', e => { if (e.target === overlay) closePopup(); });
+}
 
 // ============================================
 // CONSIGLIATI — VOTA (score 1-10)
@@ -872,9 +973,7 @@ function renderSuggested(list) {
                                     ? `<span class="sugg-voted-score"><span style="font-size:11px;color:var(--teal-light)">Voto: ${myScore}/10</span></span>`
                                     : isOwn
                                         ? `<span class="sugg-own-badge">tuo</span>`
-                                        : `<div class="sugg-stars-input" data-id="${item.id}">
-                                            ${Array.from({length:10},(_,i)=>`<button class="ssb" data-score="${i+1}" title="${i+1}/10">★</button>`).join('')}
-                                           </div>`
+                                        : `<button class="btn-sugg-vote-open" data-id="${item.id}" data-title="${esc(item.title)}" data-nick="${esc(item.nick)}">Vota</button>`
                             }
                         </div>
                     </div>
@@ -895,7 +994,12 @@ function renderSuggested(list) {
 
     }
 
-    // Listener stelline voto 1-10 con mezze stelle
+    // Listener bottone Vota — apre popup stelline
+    el.querySelectorAll('.btn-sugg-vote-open').forEach(btn => {
+        btn.addEventListener('click', () => openSuggVotePopup(btn.dataset.id, btn.dataset.title));
+    });
+
+    // Listener stelline voto 1-10 con mezze stelle (non più usato in classifica ma mantenuto per compatibilità)
     el.querySelectorAll('.sugg-stars-input').forEach(wrap => {
         const id   = wrap.dataset.id;
         const btns = Array.from(wrap.querySelectorAll('.ssb'));
