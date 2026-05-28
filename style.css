@@ -1222,3 +1222,43 @@ input[type="search"]::placeholder { color: rgba(255,255,255,.35); }
     margin: -12px -4px;
     font-size: 13px;
 }
+
+/* ═══════════════════════════════════════════
+   CARTELLE — nessun cambio colore in nessuno stato
+═══════════════════════════════════════════ */
+.catalog-folder,
+.catalog-folder:hover,
+.catalog-folder:focus,
+.catalog-folder:active,
+.catalog-folder.folder-open,
+.catalog-folder.folder-open:hover {
+    background: var(--surface2) !important;
+    border-color: var(--border) !important;
+    box-shadow: none !important;
+}
+
+.catalog-subitem,
+.catalog-subitem:hover,
+.catalog-subitem:focus,
+.catalog-subitem:active {
+    background: var(--surface2) !important;
+    border-left-color: var(--teal-dim2) !important;
+    border-color: var(--border) !important;
+}
+.catalog-subitem:hover .ci-name { color: var(--hi); }
+
+.catalog-folder > .ci-main:hover,
+.catalog-folder > .ci-main:active {
+    background: none !important;
+}
+
+/* Messaggio errore form */
+.form-error {
+    background: rgba(248,113,113,.12);
+    border: 1px solid rgba(248,113,113,.35);
+    color: #f87171;
+    font-size: 13px; font-weight: 600;
+    padding: 10px 14px; border-radius: var(--r-input);
+    margin-bottom: 12px;
+    animation: fadeSlideIn .2s ease;
+}
