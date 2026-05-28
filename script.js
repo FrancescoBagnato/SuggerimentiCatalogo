@@ -798,8 +798,8 @@ function updateFolderUI(folder) {
     const allWatch   = [...watchNicks];
     if (allSeen.length || allWatch.length) {
         avatarDiv.innerHTML = [
-            ...allSeen.map(n  => `<div class="ci-avatar seen"    title="${esc(n)} — Visto">${esc(n[0].toUpperCase())}</div>`),
-            ...allWatch.map(n => `<div class="ci-avatar watching" title="${esc(n)} — In corso">${esc(n[0].toUpperCase())}</div>`)
+            ...allSeen.map(n  => `<div class="ci-avatar seen"    title="${esc(n)} — Visto"    data-tooltip="${esc(n)}">${esc(n[0].toUpperCase())}</div>`),
+            ...allWatch.map(n => `<div class="ci-avatar watching" title="${esc(n)} — In corso" data-tooltip="${esc(n)}">${esc(n[0].toUpperCase())}</div>`)
         ].join('');
     } else {
         avatarDiv.innerHTML = '';
@@ -831,8 +831,8 @@ function updateCatalogItemUI(li) {
 
     let avatarDiv = li.querySelector('.ci-avatars');
     if (!avatarDiv) { avatarDiv = document.createElement('div'); avatarDiv.className = 'ci-avatars'; li.appendChild(avatarDiv); }
-    avatarDiv.innerHTML = [...seenUsers.map(([n]) => `<div class="ci-avatar seen" title="${esc(n)} — Visto">${esc(n[0].toUpperCase())}</div>`),
-        ...watchUsers.map(([n]) => `<div class="ci-avatar watching" title="${esc(n)} — In corso">${esc(n[0].toUpperCase())}</div>`)
+    avatarDiv.innerHTML = [...seenUsers.map(([n]) => `<div class="ci-avatar seen" title="${esc(n)} — Visto" data-tooltip="${esc(n)}">${esc(n[0].toUpperCase())}</div>`),
+        ...watchUsers.map(([n]) => `<div class="ci-avatar watching" title="${esc(n)} — In corso" data-tooltip="${esc(n)}">${esc(n[0].toUpperCase())}</div>`)
     ].join('');
 }
 
@@ -1551,14 +1551,24 @@ function initAvatarTooltips(container) {
     container.addEventListener('click', e => {
         const avatar = e.target.closest('.ci-avatar');
         if (!avatar) {
-            // Chiudi tutti i tooltip aperti
             document.querySelectorAll('.ci-avatar.tooltip-visible').forEach(a => a.classList.remove('tooltip-visible'));
             return;
         }
         e.stopPropagation();
         const isVisible = avatar.classList.contains('tooltip-visible');
         document.querySelectorAll('.ci-avatar.tooltip-visible').forEach(a => a.classList.remove('tooltip-visible'));
-        if (!isVisible) avatar.classList.add('tooltip-visible');
+        if (!isVisible) {
+            avatar.classList.add('tooltip-visible');
+            // Controlla se il tooltip esce dallo schermo a destra
+            const rect = avatar.getBoundingClientRect();
+            const tooltipEstimatedWidth = 80;
+            if (rect.left + tooltipEstimatedWidth > window.innerWidth - 8) {
+                avatar.style.setProperty('--tooltip-left', 'auto');
+                avatar.classList.add('tooltip-right-align');
+            } else {
+                avatar.classList.remove('tooltip-right-align');
+            }
+        }
     });
 }
 
