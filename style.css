@@ -1308,3 +1308,34 @@ input[type="search"]::placeholder { color: rgba(255,255,255,.35); }
 .voter-nick  { flex: 1; font-size: 14px; font-weight: 600; color: var(--hi); }
 .voter-score { display: flex; align-items: center; }
 .voter-num   { font-size: 13px; font-weight: 700; color: var(--yellow); margin-left: 6px; white-space: nowrap; }
+
+/* Tooltip avatar — mostra nome completo al tap/hover */
+.ci-avatar {
+    position: relative;
+    cursor: pointer;
+}
+.ci-avatar::after {
+    content: attr(title);
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--surface3);
+    color: var(--hi);
+    font-size: 11px;
+    font-weight: 600;
+    padding: 4px 8px;
+    border-radius: 6px;
+    border: 1px solid var(--border2);
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity .18s;
+    z-index: 50;
+    box-shadow: 0 4px 12px rgba(0,0,0,.4);
+}
+.ci-avatar:hover::after,
+.ci-avatar:focus::after,
+.ci-avatar.tooltip-visible::after {
+    opacity: 1;
+}
