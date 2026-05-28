@@ -1317,22 +1317,22 @@ input[type="search"]::placeholder { color: rgba(255,255,255,.35); }
 .ci-avatar::after {
     content: attr(data-tooltip);
     position: absolute;
-    top: calc(100% + 6px);
-    left: 0;
-    transform: none;
-    background: var(--surface3);
+    bottom: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(30,40,60,.97);
     color: var(--hi);
-    font-size: 11px;
-    font-weight: 600;
-    padding: 4px 8px;
-    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 5px 10px;
+    border-radius: 8px;
     border: 1px solid var(--border2);
     white-space: nowrap;
     pointer-events: none;
     opacity: 0;
     transition: opacity .18s;
-    z-index: 50;
-    box-shadow: 0 4px 12px rgba(0,0,0,.4);
+    z-index: 200;
+    box-shadow: 0 4px 16px rgba(0,0,0,.5);
 }
 .ci-avatar:hover::after,
 .ci-avatar:focus::after,
@@ -1344,4 +1344,5 @@ input[type="search"]::placeholder { color: rgba(255,255,255,.35); }
 .ci-avatar.tooltip-right-align::after {
     left: auto;
     right: 0;
+    transform: none;
 }
