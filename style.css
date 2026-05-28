@@ -557,10 +557,12 @@ input[type="search"]::placeholder { color: rgba(255,255,255,.35); }
 
 /* media voti */
 .sugg-avg {
-    display: flex; align-items: center; gap: 4px; margin-top: 3px; flex-wrap: wrap;
+    display: flex; align-items: center; gap: 4px; margin-top: 3px;
+    flex-wrap: nowrap; overflow: hidden;
 }
-.sugg-avg-num  { font-size: 12px; font-weight: 700; color: var(--yellow); }
-.sugg-avg-ct   { font-size: 11px; color: var(--low); }
+.sugg-avg span[style] { flex-shrink: 0; }
+.sugg-avg-num  { font-size: 12px; font-weight: 700; color: var(--yellow); white-space: nowrap; flex-shrink: 0; }
+.sugg-avg-ct   { font-size: 11px; color: var(--low); white-space: nowrap; flex-shrink: 0; }
 .sugg-avg-none { font-size: 11px; color: var(--low); font-style: italic; margin-top: 2px; }
 
 /* vista per persona */
@@ -809,7 +811,7 @@ input[type="search"]::placeholder { color: rgba(255,255,255,.35); }
 /* ═══════════════════════════════════════════
    CARTELLE CATALOGO
 ═══════════════════════════════════════════ */
-.catalog-folder { cursor: default; }
+.catalog-folder { cursor: default; background: var(--surface2) !important; border-color: var(--border) !important; }
 .catalog-folder > .ci-main { cursor: pointer; }
 
 .ci-folder-icon { font-size: 13px; flex-shrink: 0; display: none; }
@@ -836,6 +838,8 @@ input[type="search"]::placeholder { color: rgba(255,255,255,.35); }
     padding-left: 4px !important;
     border-left: 2px solid var(--teal-dim2) !important;
     border-radius: 0 8px 8px 0 !important;
+    background: var(--surface2) !important;
+    border-color: var(--border) !important;
 }
 .catalog-subitem .ci-name { font-size: 12.5px; color: var(--mid); }
 .catalog-subitem:hover .ci-name { color: var(--hi); }
