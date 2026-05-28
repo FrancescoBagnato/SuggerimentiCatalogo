@@ -274,8 +274,19 @@ input[type="search"]::placeholder { color: rgba(255,255,255,.35); }
     transition: border-color .15s, background .15s;
     cursor: pointer; overflow: hidden;
 }
-.catalog-item:not(.catalog-folder):not(.catalog-subitem):hover { border-color: var(--teal-dim2); background: var(--surface3); }
-.catalog-folder:hover { border-color: var(--border) !important; background: var(--surface2) !important; }
+/* Nessun cambio colore su nessun item del catalogo */
+.catalog-item:hover,
+.catalog-item:active,
+.catalog-item:focus,
+.catalog-folder:hover,
+.catalog-folder:active,
+.catalog-subitem:hover,
+.catalog-subitem:active {
+    border-color: var(--border) !important;
+    background: var(--surface2) !important;
+    box-shadow: none !important;
+}
+.catalog-item:not(.catalog-folder):not(.catalog-subitem):hover .ci-name { color: var(--hi); }
 .catalog-item.hidden { display: none; }
 
 .ci-main {
