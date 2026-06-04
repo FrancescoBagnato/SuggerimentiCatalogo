@@ -74,6 +74,7 @@
             <!-- TAB CATALOGO / WATCHLIST -->
             <div class="catalog-tab-bar">
                 <button class="catalog-tab active" data-ctab="catalog">Catalogo</button>
+                <button class="catalog-tab" data-ctab="recent">🆕 Novità</button>
                 <button class="catalog-tab" data-ctab="watchlist">Watchlist</button>
             </div>
 
@@ -86,6 +87,13 @@
                 <!-- Le categorie vengono generate da Firebase via JS -->
                 <div id="catalogContainer">
                     <div class="state-loading"><span class="spinner"></span> Caricamento catalogo…</div>
+                </div>
+            </div>
+
+            <!-- VISTA NOVITÀ -->
+            <div id="recentContainer" style="display:none">
+                <div id="recentList" class="recent-list">
+                    <div class="catalog-empty">Nessuna novità ancora.</div>
                 </div>
             </div>
 
