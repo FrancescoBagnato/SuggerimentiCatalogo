@@ -1375,3 +1375,17 @@ input[type="search"]::placeholder { color: rgba(255,255,255,.35); }
     white-space: nowrap;
 }
 .recent-date { font-size: 11px; color: var(--low); }
+
+/* Edit inline aggiunti di recente */
+.ap-inline-edit {
+    padding: 8px 10px 10px;
+    background: var(--surface3);
+    border: 1px solid var(--border2);
+    border-radius: 8px;
+    margin-top: -4px;
+    margin-bottom: 4px;
+    display: flex; flex-direction: column; gap: 6px;
+}
+.ap-inline-edit input,
+.ap-inline-edit select { font-size: 13px; padding: 7px 10px; }
+.ap-edit-cancel { font-size: 12px !important; color: var(--low) !important; background: none !important; border: 1px solid var(--border) !important; }
