@@ -2038,17 +2038,60 @@ function openAdminPanel() {
         if (!el) return;
         if (!recentItems.length) { el.innerHTML = '<div class="ap-empty">Nessuna novità inserita.</div>'; return; }
         el.innerHTML = recentItems.map(item => {
-            const t = TYPE_LABELS[item.type] || { icon: '🎬', label: '' };
-            return `<div class="ap-item">
+            const t = TYPE_LABELS[item.type] || { icon: '', label: '' };
+            return `<div class="ap-item" data-key="${esc(item._key)}">
                 <div class="ap-item-info">
-                    <span class="ap-item-title">${t.icon} ${esc(item.title)}</span>
-                    <span class="ap-item-meta">${t.label}${item.addedAt ? ' · ' + new Date(item.addedAt).toLocaleDateString('it-IT') : ''}</span>
+                    <span class="ap-item-title">${esc(item.title)}</span>
+                    <span class="ap-item-meta">${t.label}</span>
                 </div>
                 <div class="ap-item-actions">
-                    <button class="ap-btn ap-btn-del" data-key="${esc(item._key)}" title="Rimuovi">✕</button>
+                    <button class="ap-btn ap-btn-edit" data-key="${esc(item._key)}" title="Modifica">✏️</button>
+                    <button class="ap-btn ap-btn-del"  data-key="${esc(item._key)}" title="Rimuovi">✕</button>
+                </div>
+            </div>
+            <div class="ap-inline-edit" id="edit-${esc(item._key)}" style="display:none">
+                <input type="text" class="ap-edit-title" value="${esc(item.title)}" placeholder="Titolo">
+                <select class="ap-edit-type">
+                    <option value="serie-completa" ${item.type==='serie-completa'?'selected':''}>Serie TV completa</option>
+                    <option value="serie-stagione" ${item.type==='serie-stagione'?'selected':''}>Stagione singola</option>
+                    <option value="film-cartella"  ${item.type==='film-cartella' ?'selected':''}>Raccolta Film</option>
+                    <option value="film-singolo"   ${item.type==='film-singolo'  ?'selected':''}>Film singolo</option>
+                </select>
+                <div style="display:flex;gap:6px;margin-top:4px">
+                    <button class="ap-btn-add ap-edit-save"   data-key="${esc(item._key)}" data-addedat="${item.addedAt||0}" style="flex:1">Salva</button>
+                    <button class="ap-btn    ap-edit-cancel"  data-key="${esc(item._key)}" style="flex:0.5">Annulla</button>
                 </div>
             </div>`;
         }).join('');
+
+        el.querySelectorAll('.ap-btn-edit').forEach(btn => {
+            btn.addEventListener('click', () => {
+                el.querySelectorAll('.ap-inline-edit').forEach(d => d.style.display = 'none');
+                const editDiv = el.querySelector('#edit-' + btn.dataset.key);
+                if (editDiv) editDiv.style.display = 'block';
+            });
+        });
+        el.querySelectorAll('.ap-edit-cancel').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const editDiv = el.querySelector('#edit-' + btn.dataset.key);
+                if (editDiv) editDiv.style.display = 'none';
+            });
+        });
+        el.querySelectorAll('.ap-edit-save').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const editDiv  = el.querySelector('#edit-' + btn.dataset.key);
+                const newTitle = editDiv.querySelector('.ap-edit-title').value.trim();
+                const newType  = editDiv.querySelector('.ap-edit-type').value;
+                if (!newTitle) { editDiv.querySelector('.ap-edit-title').focus(); return; }
+                try {
+                    await set(ref(db, 'recentlyAdded/' + btn.dataset.key), {
+                        title: newTitle, type: newType,
+                        addedAt: parseInt(btn.dataset.addedat) || Date.now()
+                    });
+                    editDiv.style.display = 'none';
+                } catch(e) { alert('Errore: ' + e.message); }
+            });
+        });
         el.querySelectorAll('.ap-btn-del').forEach(btn => {
             btn.addEventListener('click', async () => {
                 if (!confirm('Rimuovere questa novità?')) return;
@@ -2320,7 +2363,6 @@ function renderRecent() {
                 <span class="recent-title">${esc(item.title)}</span>
                 <span class="recent-meta">
                     <span class="recent-type-badge">${t.label}</span>
-                    ${item.addedAt ? `<span class="recent-date">${new Date(item.addedAt).toLocaleDateString('it-IT',{day:'2-digit',month:'2-digit',year:'numeric'})}</span>` : ''}
                 </span>
             </div>
         </div>`;
