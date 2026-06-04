@@ -1346,3 +1346,32 @@ input[type="search"]::placeholder { color: rgba(255,255,255,.35); }
     right: 0;
     transform: none;
 }
+
+/* ═══════════════════════════════════════════
+   SEZIONE NOVITÀ
+═══════════════════════════════════════════ */
+.recent-list { display: flex; flex-direction: column; gap: 8px; }
+
+.recent-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 14px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 10px; animation: fadeSlideIn .2s ease;
+    transition: border-color .15s;
+}
+.recent-item:hover { border-color: var(--border2); }
+
+.recent-icon { font-size: 22px; flex-shrink: 0; }
+
+.recent-info { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
+.recent-title { font-size: 15px; font-weight: 600; color: var(--hi); word-break: break-word; }
+.recent-meta  { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+.recent-type-badge {
+    font-size: 11px; font-weight: 700;
+    padding: 2px 8px; border-radius: var(--r-pill);
+    background: var(--teal-dim); color: var(--teal-light);
+    border: 1px solid var(--teal-dim2);
+    white-space: nowrap;
+}
+.recent-date { font-size: 11px; color: var(--low); }
