@@ -1673,7 +1673,7 @@ function openAdminPanel() {
                 <button class="admin-tab" data-panel="consigliati">💡 Consigliati</button>
                 <button class="admin-tab" data-panel="catalogo">🗂️ Catalogo</button>
                 <button class="admin-tab" data-panel="contatori">🔢 Contatori</button>
-                <button class="admin-tab" data-panel="novita">🆕 Novità</button>
+                <button class="admin-tab" data-panel="novita">Aggiunti di recente</button>
             </div>
 
             <!-- RICHIESTE -->
@@ -1700,10 +1700,10 @@ function openAdminPanel() {
                 <div class="ap-add-form" style="flex-direction:column;gap:8px">
                     <input type="text" id="apRecentTitle" placeholder="Es: La Casa di Carta" autocomplete="off">
                     <select id="apRecentType">
-                        <option value="serie-completa">📺 Serie TV completa</option>
-                        <option value="serie-stagione">🗂️ Stagione singola</option>
-                        <option value="film-cartella">📁 Raccolta Film</option>
-                        <option value="film-singolo">🎬 Film singolo</option>
+                        <option value="serie-completa">Serie TV completa</option>
+                        <option value="serie-stagione">Stagione singola</option>
+                        <option value="film-cartella">Raccolta Film</option>
+                        <option value="film-singolo">Film singolo</option>
                     </select>
                     <button id="apAddRecent" class="ap-btn-add">+ Aggiungi</button>
                 </div>
@@ -2299,10 +2299,10 @@ onValue(recentRef, snap => {
 // NOVITÀ — RENDER
 // ============================================
 const TYPE_LABELS = {
-    'film-singolo':   { icon: '🎬', label: 'Film' },
-    'film-cartella':  { icon: '📁', label: 'Raccolta Film' },
-    'serie-completa': { icon: '📺', label: 'Serie TV' },
-    'serie-stagione': { icon: '🗂️', label: 'Stagione' },
+    'film-singolo':   { icon: '', label: 'Film singolo' },
+    'film-cartella':  { icon: '', label: 'Raccolta Film' },
+    'serie-completa': { icon: '', label: 'Serie TV' },
+    'serie-stagione': { icon: '', label: 'Stagione' },
 };
 
 function renderRecent() {
@@ -2315,7 +2315,7 @@ function renderRecent() {
     el.innerHTML = recentItems.map(item => {
         const t = TYPE_LABELS[item.type] || { icon: '🎬', label: item.type || '' };
         return `<div class="recent-item">
-            <span class="recent-icon">${t.icon}</span>
+            ${t.icon ? `<span class="recent-icon">${t.icon}</span>` : ''}
             <div class="recent-info">
                 <span class="recent-title">${esc(item.title)}</span>
                 <span class="recent-meta">
