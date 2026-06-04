@@ -35,6 +35,7 @@ const suggestedRef     = ref(db, 'suggested');
 const watchlistRef     = ref(db, 'watchlist');
 const catalogStructRef = ref(db, 'catalogStructure');
 const countersRef      = ref(db, 'counters');
+const recentRef        = ref(db, 'recentlyAdded');  // ultimi 10 titoli aggiunti
 
 // ============================================
 // STATO GLOBALE
@@ -45,6 +46,7 @@ let allSuggested  = [];
 let catalogData   = {};
 let currentTab      = 'date';
 let currentCatalogTab  = 'catalog';
+let recentItems        = [];  // ultimi 10 titoli aggiunti
 let catalogStructure   = { serietv: [], film: [] };  // dati da Firebase
 let watchlistData   = {};           // { titleKey: true } per il nick corrente
 let currentSuggSort = 'rank';   // default: Classifica
@@ -1671,6 +1673,7 @@ function openAdminPanel() {
                 <button class="admin-tab" data-panel="consigliati">💡 Consigliati</button>
                 <button class="admin-tab" data-panel="catalogo">🗂️ Catalogo</button>
                 <button class="admin-tab" data-panel="contatori">🔢 Contatori</button>
+                <button class="admin-tab" data-panel="novita">🆕 Novità</button>
             </div>
 
             <!-- RICHIESTE -->
@@ -1689,6 +1692,22 @@ function openAdminPanel() {
             <div class="admin-section" id="ap-consigliati">
                 <p class="admin-hint">Puoi eliminare qualsiasi consiglio.</p>
                 <div id="ap-sugg-list" class="ap-list"></div>
+            </div>
+
+            <!-- NOVITÀ -->
+            <div class="admin-section" id="ap-novita">
+                <p class="admin-hint">Ultimi titoli aggiunti — max 10 visibili. Ordine: dal più recente.</p>
+                <div class="ap-add-form" style="flex-direction:column;gap:8px">
+                    <input type="text" id="apRecentTitle" placeholder="Es: La Casa di Carta" autocomplete="off">
+                    <select id="apRecentType">
+                        <option value="serie-completa">📺 Serie TV completa</option>
+                        <option value="serie-stagione">🗂️ Stagione singola</option>
+                        <option value="film-cartella">📁 Raccolta Film</option>
+                        <option value="film-singolo">🎬 Film singolo</option>
+                    </select>
+                    <button id="apAddRecent" class="ap-btn-add">+ Aggiungi</button>
+                </div>
+                <div id="ap-recent-list" class="ap-list" style="margin-top:12px"></div>
             </div>
 
             <!-- CONTATORI -->
@@ -2011,6 +2030,45 @@ function openAdminPanel() {
     renderApEvased();
     renderApSugg();
     renderApCatalog();
+    renderApRecent();
+
+    // ── Novità ──
+    function renderApRecent() {
+        const el = overlay.querySelector('#ap-recent-list');
+        if (!el) return;
+        if (!recentItems.length) { el.innerHTML = '<div class="ap-empty">Nessuna novità inserita.</div>'; return; }
+        el.innerHTML = recentItems.map(item => {
+            const t = TYPE_LABELS[item.type] || { icon: '🎬', label: '' };
+            return `<div class="ap-item">
+                <div class="ap-item-info">
+                    <span class="ap-item-title">${t.icon} ${esc(item.title)}</span>
+                    <span class="ap-item-meta">${t.label}${item.addedAt ? ' · ' + new Date(item.addedAt).toLocaleDateString('it-IT') : ''}</span>
+                </div>
+                <div class="ap-item-actions">
+                    <button class="ap-btn ap-btn-del" data-key="${esc(item._key)}" title="Rimuovi">✕</button>
+                </div>
+            </div>`;
+        }).join('');
+        el.querySelectorAll('.ap-btn-del').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                if (!confirm('Rimuovere questa novità?')) return;
+                try { await remove(ref(db, 'recentlyAdded/' + btn.dataset.key)); }
+                catch(e) { alert('Errore: ' + e.message); }
+            });
+        });
+    }
+
+    overlay.querySelector('#apAddRecent')?.addEventListener('click', async () => {
+        const titleInput = overlay.querySelector('#apRecentTitle');
+        const typeInput  = overlay.querySelector('#apRecentType');
+        const title      = titleInput.value.trim();
+        const type       = typeInput.value;
+        if (!title) { titleInput.focus(); return; }
+        try {
+            await push(recentRef, { title, type, addedAt: Date.now() });
+            titleInput.value = '';
+        } catch(e) { alert('Errore: ' + e.message); }
+    });
 
     // ── Contatori — precompila con valori da Firebase ──
     const counterKeys = ['folders-serietv','episodes-serietv','folders-film','episodes-film'];
@@ -2188,18 +2246,26 @@ document.querySelectorAll('.catalog-tab').forEach(tab => {
         const catEl  = document.getElementById('catalogContainer');
         const catSearch = document.querySelector('.catalog-search-wrap');
         const wlEl   = document.getElementById('watchlistContainer');
+        const recentEl = document.getElementById('recentContainer');
         if (currentCatalogTab === 'watchlist') {
-            catEl.style.display  = 'none';
+            catEl.style.display    = 'none';
             if (catSearch) catSearch.style.display = 'none';
-            wlEl.style.display   = 'block';
-            // precompila nick se salvato
+            wlEl.style.display     = 'block';
+            if (recentEl) recentEl.style.display = 'none';
             const inp = document.getElementById('watchlistNickInput');
             const nick = getNickname();
             if (nick && inp) { inp.value = nick; loadWatchlist(nick); }
+        } else if (currentCatalogTab === 'recent') {
+            catEl.style.display    = 'none';
+            if (catSearch) catSearch.style.display = 'none';
+            wlEl.style.display     = 'none';
+            if (recentEl) recentEl.style.display = 'block';
+            renderRecent();
         } else {
-            catEl.style.display  = 'block';
+            catEl.style.display    = 'block';
             if (catSearch) catSearch.style.display = '';
-            wlEl.style.display   = 'none';
+            wlEl.style.display     = 'none';
+            if (recentEl) recentEl.style.display = 'none';
         }
     });
 });
@@ -2211,6 +2277,55 @@ document.getElementById('watchlistNickBtn')?.addEventListener('click', () => {
     saveNickname(nick);
     loadWatchlist(nick);
 });
+
+// ============================================
+// NOVITÀ — FIREBASE LISTENER
+// ============================================
+onValue(recentRef, snap => {
+    const raw = snap.val();
+    recentItems = raw
+        ? Object.entries(raw)
+            .map(([k,v]) => ({...v, _key: k}))
+            .sort((a,b) => (b.addedAt||0) - (a.addedAt||0))
+            .slice(0,10)
+        : [];
+    if (currentCatalogTab === 'recent') renderRecent();
+    // Aggiorna pannello admin se aperto
+    const apList = document.querySelector('#ap-recent-list');
+    if (apList && typeof renderApRecent === 'function') renderApRecent();
+});
+
+// ============================================
+// NOVITÀ — RENDER
+// ============================================
+const TYPE_LABELS = {
+    'film-singolo':   { icon: '🎬', label: 'Film' },
+    'film-cartella':  { icon: '📁', label: 'Raccolta Film' },
+    'serie-completa': { icon: '📺', label: 'Serie TV' },
+    'serie-stagione': { icon: '🗂️', label: 'Stagione' },
+};
+
+function renderRecent() {
+    const el = document.getElementById('recentList');
+    if (!el) return;
+    if (!recentItems.length) {
+        el.innerHTML = '<div class="catalog-empty">Nessuna novità ancora.<br>Aggiungile dal pannello admin.</div>';
+        return;
+    }
+    el.innerHTML = recentItems.map(item => {
+        const t = TYPE_LABELS[item.type] || { icon: '🎬', label: item.type || '' };
+        return `<div class="recent-item">
+            <span class="recent-icon">${t.icon}</span>
+            <div class="recent-info">
+                <span class="recent-title">${esc(item.title)}</span>
+                <span class="recent-meta">
+                    <span class="recent-type-badge">${t.label}</span>
+                    ${item.addedAt ? `<span class="recent-date">${new Date(item.addedAt).toLocaleDateString('it-IT',{day:'2-digit',month:'2-digit',year:'numeric'})}</span>` : ''}
+                </span>
+            </div>
+        </div>`;
+    }).join('');
+}
 
 // ============================================
 // INIT
