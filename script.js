@@ -36,6 +36,7 @@ const watchlistRef     = ref(db, 'watchlist');
 const catalogStructRef = ref(db, 'catalogStructure');
 const countersRef      = ref(db, 'counters');
 const recentRef        = ref(db, 'recentlyAdded');  // ultimi 10 titoli aggiunti
+const playtimeRef      = ref(db, 'playtime');
 
 // ============================================
 // STATO GLOBALE
@@ -2290,11 +2291,13 @@ document.querySelectorAll('.catalog-tab').forEach(tab => {
         const catSearch = document.querySelector('.catalog-search-wrap');
         const wlEl   = document.getElementById('watchlistContainer');
         const recentEl = document.getElementById('recentContainer');
+        const ptEl = document.getElementById('playtimeContainer');
         if (currentCatalogTab === 'watchlist') {
             catEl.style.display    = 'none';
             if (catSearch) catSearch.style.display = 'none';
             wlEl.style.display     = 'block';
             if (recentEl) recentEl.style.display = 'none';
+            if (ptEl) ptEl.style.display = 'none';
             const inp = document.getElementById('watchlistNickInput');
             const nick = getNickname();
             if (nick && inp) { inp.value = nick; loadWatchlist(nick); }
@@ -2303,12 +2306,21 @@ document.querySelectorAll('.catalog-tab').forEach(tab => {
             if (catSearch) catSearch.style.display = 'none';
             wlEl.style.display     = 'none';
             if (recentEl) recentEl.style.display = 'block';
+            if (ptEl) ptEl.style.display = 'none';
             renderRecent();
+        } else if (currentCatalogTab === 'playtime') {
+            catEl.style.display    = 'none';
+            if (catSearch) catSearch.style.display = 'none';
+            wlEl.style.display     = 'none';
+            if (recentEl) recentEl.style.display = 'none';
+            if (ptEl) ptEl.style.display = 'block';
+            renderPlaytime();
         } else {
             catEl.style.display    = 'block';
             if (catSearch) catSearch.style.display = '';
             wlEl.style.display     = 'none';
             if (recentEl) recentEl.style.display = 'none';
+            if (ptEl) ptEl.style.display = 'none';
         }
     });
 });
@@ -2367,6 +2379,89 @@ function renderRecent() {
             </div>
         </div>`;
     }).join('');
+}
+
+// ============================================
+// STATISTICHE VISIONE (playtime)
+// ============================================
+let playtimeData  = null;
+let currentPtTab  = 'all_time';
+
+onValue(playtimeRef, (snap) => {
+    playtimeData = snap.val();
+    if (currentCatalogTab === 'playtime') renderPlaytime();
+});
+
+function renderPlaytime() {
+    const content = document.getElementById('playtimeContent');
+    const updated = document.getElementById('playtimeUpdated');
+    if (!content) return;
+
+    if (!playtimeData) {
+        content.innerHTML = '<div class="catalog-empty">Nessun dato disponibile ancora.</div>';
+        return;
+    }
+
+    const section = playtimeData[currentPtTab] || {};
+    const total   = section['_total'] || 0;
+    const label   = currentPtTab === 'this_month'
+        ? (playtimeData.month_label || 'Questo mese')
+        : 'All time';
+
+    const users = Object.entries(section)
+        .filter(([k]) => k !== '_total')
+        .sort((a, b) => b[1] - a[1]);
+
+    const maxHours = users.length ? users[0][1] : 1;
+    const medals = ['🥇', '🥈', '🥉'];
+
+    // Render tab bar interna
+    const tabBar = `
+        <div class="tab-bar" id="ptTabBar" style="margin-bottom:16px">
+            <button class="tab ${currentPtTab === 'all_time' ? 'active' : ''}" data-pt="all_time">All time</button>
+            <button class="tab ${currentPtTab === 'this_month' ? 'active' : ''}" data-pt="this_month">Questo mese</button>
+        </div>`;
+
+    content.innerHTML = tabBar + `
+        <div class="pt-total">
+            <span class="pt-total-label">${label}</span>
+            <span class="pt-total-value">${formatHours(total)}</span>
+        </div>
+        <div class="pt-users">
+            ${users.length === 0
+                ? '<div class="catalog-empty">Nessuna visione registrata.</div>'
+                : users.map(([name, hours], i) => {
+                    const pct = Math.round((hours / maxHours) * 100);
+                    return `<div class="pt-row">
+                        <div class="pt-row-top">
+                            <span class="pt-medal">${medals[i] || ''}</span>
+                            <span class="pt-name">${esc(name)}</span>
+                            <span class="pt-hours">${formatHours(hours)}</span>
+                        </div>
+                        <div class="pt-bar-track">
+                            <div class="pt-bar-fill" style="width:${pct}%"></div>
+                        </div>
+                    </div>`;
+                }).join('')
+            }
+        </div>`;
+
+    // Listener tab interne
+    content.querySelectorAll('[data-pt]').forEach(btn => {
+        btn.addEventListener('click', function() {
+            currentPtTab = this.dataset.pt;
+            renderPlaytime();
+        });
+    });
+
+    if (updated && playtimeData.updated_at) {
+        updated.textContent = `Aggiornato il ${playtimeData.updated_at}`;
+    }
+}
+
+function formatHours(h) {
+    if (h < 1) return `${Math.round(h * 60)} min`;
+    return `${h.toLocaleString('it-IT')} ore`;
 }
 
 // ============================================
