@@ -2397,7 +2397,10 @@ function renderPlaytime() {
     }
 
     const isMonth = currentPtTab === 'this_month';
-    const dataKey = isMonth ? 'this_month' : currentPtSubTab;
+    // Resetta il sottotab se si cambia tab principale
+    if (isMonth && !currentPtSubTab.startsWith('this_month')) currentPtSubTab = 'this_month';
+    if (!isMonth && currentPtSubTab.startsWith('this_month')) currentPtSubTab = 'all_time';
+    const dataKey = currentPtSubTab;
     const section = playtimeData[dataKey] || {};
     const total   = section['_total'] || 0;
     const label   = isMonth
@@ -2419,13 +2422,16 @@ function renderPlaytime() {
             <button class="tab ${isMonth ? 'active' : ''}" data-pt="this_month">Questo mese</button>
         </div>`;
 
-    // Sottotab solo per All time
-    const subTabBar = !isMonth ? `
+    // Sottotab per All time e Questo mese
+    const allSubTabs = !isMonth
+        ? [['all_time','Totale'],['all_time_film','Film'],['all_time_tv','Serie TV']]
+        : [['this_month','Totale'],['this_month_film','Film'],['this_month_tv','Serie TV']];
+    const subTabBar = `
         <div class="tab-bar pt-subtab-bar" style="margin-bottom:16px">
-            <button class="tab ${currentPtSubTab === 'all_time' ? 'active' : ''}" data-ptsub="all_time">Totale</button>
-            <button class="tab ${currentPtSubTab === 'all_time_film' ? 'active' : ''}" data-ptsub="all_time_film">🎬 Film</button>
-            <button class="tab ${currentPtSubTab === 'all_time_tv' ? 'active' : ''}" data-ptsub="all_time_tv">📺 Serie TV</button>
-        </div>` : '';
+            ${allSubTabs.map(([key, label]) =>
+                `<button class="tab ${currentPtSubTab === key ? 'active' : ''}" data-ptsub="${key}">${label}</button>`
+            ).join('')}
+        </div>`;
 
     content.innerHTML = tabBar + subTabBar + `
         <div class="pt-total">
