@@ -1389,3 +1389,80 @@ input[type="search"]::placeholder { color: rgba(255,255,255,.35); }
 .ap-inline-edit input,
 .ap-inline-edit select { font-size: 13px; padding: 7px 10px; }
 .ap-edit-cancel { font-size: 12px !important; color: var(--low) !important; background: none !important; border: 1px solid var(--border) !important; }
+
+/* ============================================
+   STATISTICHE VISIONE (playtime)
+   ============================================ */
+.pt-total {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 16px 20px;
+    background: var(--surface-2, #f4f6fb);
+    border-radius: 12px;
+    margin-bottom: 20px;
+}
+.pt-total-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-2, #6b7a99);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.pt-total-value {
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--accent, #5b7cfa);
+}
+.pt-users {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+.pt-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.pt-row-top {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.pt-medal {
+    font-size: 18px;
+    width: 24px;
+    text-align: center;
+    flex-shrink: 0;
+}
+.pt-name {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-1, #1a2340);
+    flex: 1;
+}
+.pt-hours {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--accent, #5b7cfa);
+}
+.pt-bar-track {
+    height: 6px;
+    background: var(--surface-2, #eef0f7);
+    border-radius: 99px;
+    overflow: hidden;
+    margin-left: 32px;
+}
+.pt-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent, #5b7cfa), #a78bfa);
+    border-radius: 99px;
+    transition: width 0.6s ease;
+}
+.playtime-updated {
+    margin-top: 16px;
+    text-align: right;
+    font-size: 12px;
+    color: var(--text-2, #6b7a99);
+    opacity: 0.7;
+}
