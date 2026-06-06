@@ -1,2493 +1,1474 @@
-// ============================================
-// CONFIGURAZIONE FIREBASE
-// ============================================
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js';
-import {
-    getDatabase, ref, push, onValue,
-    update, remove, get, set
-} from 'https://www.gstatic.com/firebasejs/12.8.0/firebase-database.js';
+/* ═══════════════════════════════════════════
+   RESET & BASE
+═══════════════════════════════════════════ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-const firebaseConfig = {
-    apiKey: "AIzaSyCVI_TP1LaLIUDc3QLaJtapvoeZ7mOFqcI",
-    authDomain: "suggerimenticatalogo.firebaseapp.com",
-    databaseURL: "https://suggerimenticatalogo-default-rtdb.europe-west1.firebasedatabase.app",
-    projectId: "suggerimenticatalogo",
-    storageBucket: "suggerimenticatalogo.firebasestorage.app",
-    messagingSenderId: "331103414090",
-    appId: "1:331103414090:web:f387d3033a8c5ed9ffc3b3",
-    measurementId: "G-LNZ45LZE6N"
-};
+/*
+   PALETTE — Blu notte + Petrolio/Verde scuro
+   ─────────────────────────────────────────
+   Background: gradiente blu originale
+   Surface cards: antracite caldo (non blu puro)
+   Accent primario: #4f8ef7 (blu elettrico, solo per CTA)
+   Accent secondario: #2a9d8f (petrolio/teal)
+   Testi: tutti bianchi o quasi
+*/
+:root {
+    /* Background — gradiente originale */
+    --bg-grad: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
 
-// Password admin: confronto via SHA-256 — la password in chiaro non è nel codice
-// Per cambiare password: calcola il nuovo SHA-256 su https://emn178.github.io/online-tools/sha256.html
-// e aggiorna il valore su Firebase: Admin → adminHash
-async function hashPassword(str) {
-    const buf  = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
-    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+    /* Superfici — più chiare, lasciano respirare il gradiente */
+    --surface:   rgba(255,255,255,.08);
+    --surface2:  rgba(255,255,255,.13);
+    --surface3:  rgba(255,255,255,.19);
+
+    /* Bordi */
+    --border:    rgba(255,255,255,.16);
+    --border2:   rgba(255,255,255,.28);
+
+    /* Accento blu — solo bottoni principali e focus */
+    --accent:     #4f8ef7;
+    --accent-dim: rgba(79,142,247,.15);
+    --accent-dim2:rgba(79,142,247,.28);
+
+    /* Accento petrolio — intestazioni sezioni, badge, dettagli */
+    --teal:      #2a9d8f;
+    --teal-light:#3dbdad;
+    --teal-dim:  rgba(42,157,143,.18);
+    --teal-dim2: rgba(42,157,143,.32);
+    --teal-glow: rgba(42,157,143,.25);
+
+    /* Testo — tutto bianco */
+    --hi:   #ffffff;
+    --mid:  #cbd5e1;
+    --low:  #64748b;
+
+    /* Stato verde */
+    --green:     #34d399;
+    --green-dim: rgba(52,211,153,.13);
+    --green-brd: rgba(52,211,153,.32);
+
+    /* Stato giallo */
+    --yellow:    #fbbf24;
+    --yellow-dim:rgba(251,191,36,.15);
+    --yellow-brd:rgba(251,191,36,.35);
+
+    --r-card:  18px;
+    --r-input: 11px;
+    --r-pill:  999px;
+
+    --shadow-card:  0 4px 24px rgba(0,0,0,.4), 0 1px 6px rgba(0,0,0,.25);
+    --shadow-popup: 0 24px 80px rgba(0,0,0,.7), 0 4px 16px rgba(0,0,0,.4);
+
+    --font-sans:  'DM Sans', system-ui, sans-serif;
+    --font-serif: 'DM Serif Display', Georgia, serif;
 }
 
-const app          = initializeApp(firebaseConfig);
-const db           = getDatabase(app);
-const requestsRef  = ref(db, 'requests');
-const evasedRef    = ref(db, 'evased');
-const catalogRef   = ref(db, 'catalog');
-const suggestedRef     = ref(db, 'suggested');
-const watchlistRef     = ref(db, 'watchlist');
-const catalogStructRef = ref(db, 'catalogStructure');
-const countersRef      = ref(db, 'counters');
-const recentRef        = ref(db, 'recentlyAdded');  // ultimi 10 titoli aggiunti
-const playtimeRef      = ref(db, 'playtime');
+html { font-size: 16px; -webkit-text-size-adjust: 100%; }
 
-// ============================================
-// STATO GLOBALE
-// ============================================
-let allRequests   = [];
-let allEvased     = [];
-let allSuggested  = [];
-let catalogData   = {};
-let currentTab      = 'date';
-let currentCatalogTab  = 'catalog';
-let recentItems        = [];  // ultimi 10 titoli aggiunti
-let catalogStructure   = { serietv: [], film: [] };  // dati da Firebase
-let watchlistData   = {};           // { titleKey: true } per il nick corrente
-let currentSuggSort = 'rank';   // default: Classifica
-let isAdminMode     = false;
-
-// ============================================
-// UTILITY
-// ============================================
-function esc(text) {
-    const d = document.createElement('div');
-    d.textContent = text ?? '';
-    return d.innerHTML;
-}
-// Decodifica entità HTML (es. &amp; → &) per mostrare testo visibile
-function unesc(text) {
-    const d = document.createElement('div');
-    d.innerHTML = text ?? '';
-    return d.textContent;
-}
-function titleToKey(title) { return title.replace(/[.#$\/\[\]]/g, '_'); }
-
-function checkAdmin()  { return localStorage.getItem('isAdmin') === 'true'; }
-function getNickname() { return localStorage.getItem('catalogNick') || ''; }
-function saveNickname(n) { if (n) localStorage.setItem('catalogNick', n.trim()); }
-
-// Voti consigliati: { id: score } salvati in localStorage
-function getSuggRatings()          { return JSON.parse(localStorage.getItem('suggRatings') || '{}'); }
-function saveSuggRating(id, score) { const r = getSuggRatings(); r[id] = score; localStorage.setItem('suggRatings', JSON.stringify(r)); }
-function getSuggRating(id)         { return getSuggRatings()[id] || 0; }
-function hasSuggVoted(id)          { return !!getSuggRatings()[id]; }
-
-function showFormError(formId, msg) {
-    const old = document.querySelector('#' + formId + ' .form-error');
-    if (old) old.remove();
-    const el = document.createElement('div');
-    el.className = 'form-error';
-    el.textContent = '⚠ ' + msg;
-    const form = document.getElementById(formId);
-    if (form) form.insertBefore(el, form.firstChild);
-    setTimeout(() => el.remove(), 3500);
+body {
+    font-family: var(--font-sans);
+    background: var(--bg-grad);
+    background-attachment: fixed;
+    color: var(--hi);
+    line-height: 1.5;
+    min-height: 100dvh;
+    padding-bottom: env(safe-area-inset-bottom);
 }
 
-function showToast(msg = 'Fatto!') {
-    const old = document.querySelector('.success-toast');
-    if (old) old.remove();
-    const t = document.createElement('div');
-    t.className = 'success-toast';
-    t.innerHTML = `<span class="success-toast-icon">✓</span>${esc(msg)}`;
-    const form = document.getElementById('requestForm');
-    form.parentNode.insertBefore(t, form);
-    setTimeout(() => t.remove(), 3200);
+/* ═══════════════════════════════════════════
+   TOP NAV
+═══════════════════════════════════════════ */
+.topnav {
+    position: sticky; top: 0; z-index: 200;
+    background: rgba(15,20,35,.85);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border-bottom: 1px solid var(--border);
+}
+.topnav-inner {
+    max-width: 680px; margin: 0 auto; padding: 0 20px;
+    height: 54px; display: flex; align-items: center; justify-content: space-between;
+}
+.brand { display: flex; align-items: center; gap: 9px; font-weight: 700; font-size: 15px; color: var(--hi); }
+.brand-icon {
+    width: 30px; height: 30px;
+    background: linear-gradient(135deg, var(--teal), #1f7a6e);
+    color: #fff; border-radius: 8px;
+    display: grid; place-items: center;
+    font-size: 12px; font-weight: 800;
+    box-shadow: 0 0 18px var(--teal-glow);
 }
 
-// ============================================
-// STELLE HELPER (rating 0.5..10, step 0.5)
-// ============================================
-function starSvgInline(type, sz) {
-    const uid  = 'hc' + Math.random().toString(36).slice(2, 7);
-    const pts  = '12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26';
-    const base = `<svg width="${sz}" height="${sz}" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">`;
-    if (type === 'full')
-        return base + `<polygon points="${pts}" fill="#fbbf24" stroke="#fbbf24" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
-    if (type === 'empty')
-        return base + `<polygon points="${pts}" fill="none" stroke="#64748b" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
-    return base
-        + `<defs><clipPath id="${uid}"><rect x="0" y="0" width="12" height="24"/></clipPath></defs>`
-        + `<polygon points="${pts}" fill="none" stroke="#64748b" stroke-width="1.5" stroke-linejoin="round"/>`
-        + `<polygon points="${pts}" fill="#fbbf24" stroke="#fbbf24" stroke-width="1.5" stroke-linejoin="round" clip-path="url(#${uid})"/>`
-        + `</svg>`;
+.btn-admin {
+    font-family: var(--font-sans); font-size: 12.5px; font-weight: 600;
+    padding: 6px 16px; border-radius: var(--r-pill);
+    border: 1.5px solid var(--border2);
+    background: var(--surface2); color: var(--mid);
+    cursor: pointer; transition: border-color .2s, color .2s;
+}
+.btn-admin:hover { border-color: var(--teal-light); color: var(--teal-light); }
+.btn-admin.admin-active { background: var(--green-dim); border-color: var(--green-brd); color: var(--green); }
+
+/* ═══════════════════════════════════════════
+   HERO
+═══════════════════════════════════════════ */
+.hero {
+    max-width: 680px; margin: 0 auto;
+    padding: 36px 20px 28px; text-align: center; position: relative;
+}
+.hero::before {
+    content: ''; position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+    width: 360px; height: 240px;
+    background: radial-gradient(ellipse at center, rgba(42,157,143,.14) 0%, transparent 70%);
+    pointer-events: none;
+}
+.hero-eyebrow { display: none; }
+.hero-title { font-family: var(--font-serif); font-size: clamp(30px,8vw,46px); font-weight: 400; line-height: 1.1; color: var(--hi); margin-bottom: 12px; }
+.hero-title em { font-style: italic; color: var(--teal-light); }
+.hero-sub { font-size: 15px; color: var(--mid); }
+
+/* ═══════════════════════════════════════════
+   MAIN & CARDS
+═══════════════════════════════════════════ */
+.main { max-width: 680px; margin: 0 auto; padding: 0 16px 56px; display: flex; flex-direction: column; gap: 16px; width: 100%; }
+
+.card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r-card);
+    padding: 24px 20px;
+    box-shadow: var(--shadow-card);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
 }
 
-function starsHtml(rating, size = 12) {
-    if (!rating) return '';
-    let s = '';
-    for (let i = 1; i <= 10; i++) {
-        if (rating >= i)            s += starSvgInline('full', size);
-        else if (rating >= i - 0.5) s += starSvgInline('half', size);
-        else                        s += starSvgInline('empty', size);
-    }
-    return `<span style="display:inline-flex;align-items:center;gap:1px;vertical-align:middle">${s}<span style="margin-left:4px;font-size:${size}px;color:#cbd5e1;font-weight:600">${rating.toFixed(1)}</span></span>`;
+/* Intestazioni sezioni — bianco tenue */
+.card-label {
+    font-size: 10.5px; font-weight: 700; letter-spacing: .13em;
+    text-transform: uppercase; color: rgba(255,255,255,.45);
+    margin-bottom: 20px;
+}
+.card-header-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+.card-header-row .card-label { margin-bottom: 0; }
+
+.pill {
+    font-size: 12px; font-weight: 700; padding: 3px 10px;
+    border-radius: var(--r-pill);
+    background: var(--teal-dim); color: var(--teal-light);
+    border: 1px solid var(--teal-dim2);
 }
 
-function avgRating(users) {
-    if (!users) return null;
-    const ratings = Object.values(users).map(u => u.rating).filter(r => r && r > 0);
-    if (!ratings.length) return null;
-    return Math.round((ratings.reduce((a, b) => a + b, 0) / ratings.length) * 2) / 2;
+/* ═══════════════════════════════════════════
+   FORM
+═══════════════════════════════════════════ */
+.field-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; margin-bottom: 12px; }
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field--sm { min-width: 110px; max-width: 130px; }
+
+/* Label — bianche */
+label { font-size: 12.5px; font-weight: 600; color: var(--hi); letter-spacing: .01em; }
+.label-opt { font-weight: 400; color: var(--low); font-size: 12px; }
+
+input[type="text"], input[type="search"], select, textarea {
+    font-family: var(--font-sans); font-size: 15px;
+    color: var(--hi);
+    background: var(--surface2);
+    border: 1.5px solid var(--border);
+    border-radius: var(--r-input);
+    padding: 11px 13px; width: 100%;
+    transition: border-color .18s, background .18s, box-shadow .18s;
+    -webkit-appearance: none; appearance: none; outline: none;
+}
+input::placeholder, textarea::placeholder { color: var(--low); }
+input:focus, select:focus, textarea:focus {
+    border-color: var(--teal);
+    background: var(--surface3);
+    box-shadow: 0 0 0 3px var(--teal-dim);
+}
+textarea { resize: vertical; min-height: 72px; line-height: 1.5; }
+select {
+    cursor: pointer; color: var(--hi);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath d='M4 6l4 4 4-4' stroke='%2364748b' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 10px center; padding-right: 34px;
+}
+select option { background: #1e2030; color: var(--hi); }
+
+#requestForm .field { margin-bottom: 12px; }
+#requestForm .field-row { margin-bottom: 0; }
+#requestForm .field-row + .field { margin-top: 0; }
+
+/* Placeholder testi bianchi */
+input[type="text"]::placeholder { color: rgba(255,255,255,.35); }
+textarea::placeholder { color: rgba(255,255,255,.35); }
+input[type="search"]::placeholder { color: rgba(255,255,255,.35); }
+
+.btn-submit {
+    margin-top: 18px; width: 100%;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 14px 20px;
+    background: linear-gradient(135deg, var(--teal) 0%, #1f7a6e 100%);
+    color: #fff; border: none; border-radius: var(--r-input);
+    font-family: var(--font-sans); font-size: 15px; font-weight: 700;
+    cursor: pointer; letter-spacing: .02em;
+    box-shadow: 0 0 28px var(--teal-glow);
+    transition: opacity .18s, transform .12s, box-shadow .18s;
+}
+.btn-submit:hover { opacity: .9; box-shadow: 0 0 40px rgba(42,157,143,.45); }
+.btn-submit:active { transform: scale(.985); }
+.btn-submit:disabled { opacity: .4; cursor: not-allowed; transform: none; box-shadow: none; }
+.btn-submit-icon { font-size: 17px; }
+
+.success-toast {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--green-dim); border: 1px solid var(--green-brd); color: var(--green);
+    font-size: 14px; font-weight: 600;
+    padding: 12px 16px; border-radius: var(--r-input);
+    margin-bottom: 16px; animation: fadeSlideIn .25s ease;
+}
+.success-toast-icon { font-size: 18px; }
+
+/* ═══════════════════════════════════════════
+   CATALOGO
+═══════════════════════════════════════════ */
+.catalog-search-wrap { position: relative; margin-bottom: 16px; }
+.catalog-search { padding-left: 38px !important; }
+.catalog-search-icon { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: rgba(255,255,255,.5); font-size: 22px; pointer-events: none; line-height: 1; }
+
+.catalog-category { border-bottom: 1px solid var(--border); }
+.catalog-category:last-of-type { border-bottom: none; }
+
+.catalog-cat-btn {
+    width: 100%; display: flex; align-items: center; justify-content: space-between;
+    padding: 15px 0; background: none; border: none; cursor: pointer;
+    font-family: var(--font-sans); color: var(--hi); text-align: left;
+    transition: opacity .15s;
+}
+.catalog-cat-btn:hover { opacity: .85; }
+.cat-left { display: flex; align-items: center; gap: 10px; }
+
+.cat-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.dot-tv   { background: var(--teal-light); box-shadow: 0 0 6px var(--teal-glow); }
+.dot-film { background: #f87171; box-shadow: 0 0 6px rgba(248,113,113,.5); }
+
+/* Nome categoria — bianco */
+.cat-name { font-size: 15px; font-weight: 600; color: var(--hi); }
+.cat-count {
+    font-size: 11.5px; font-weight: 700;
+    background: var(--teal-dim); color: var(--teal-light);
+    padding: 2px 9px; border-radius: var(--r-pill);
+    border: 1px solid var(--teal-dim2);
+}
+.cat-chevron { color: var(--low); transition: transform .22s ease; display: flex; }
+.catalog-cat-btn[aria-expanded="true"] .cat-chevron { transform: rotate(180deg); }
+
+.catalog-panel { max-height: 0; overflow: hidden; }
+.catalog-panel.open { max-height: none; overflow: visible; }
+
+.catalog-list { list-style: none; padding-bottom: 14px; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+
+.catalog-item {
+    border-radius: 9px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    transition: border-color .15s, background .15s;
+    cursor: pointer; overflow: hidden;
+}
+/* Nessun cambio colore su nessun item del catalogo */
+.catalog-item:hover,
+.catalog-item:active,
+.catalog-item:focus,
+.catalog-folder:hover,
+.catalog-folder:active,
+.catalog-subitem:hover,
+.catalog-subitem:active {
+    border-color: var(--border) !important;
+    background: var(--surface2) !important;
+    box-shadow: none !important;
+}
+.catalog-item:not(.catalog-folder):not(.catalog-subitem):hover .ci-name { color: var(--hi); }
+.catalog-item.hidden { display: none; }
+
+.ci-main {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 10px; gap: 4px;
+}
+/* Titoli item — bianchi */
+.ci-name { font-size: 13px; color: var(--hi); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; transition: color .15s; }
+.catalog-item:hover .ci-name { color: var(--teal-light); }
+
+.ci-stars { font-size: 11px; color: var(--yellow); white-space: nowrap; flex-shrink: 0; }
+
+.ci-avatars { display: flex; gap: 3px; flex-wrap: wrap; padding: 0 10px 7px; }
+.ci-avatar {
+    width: 20px; height: 20px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 9px; font-weight: 800; border: 1.5px solid transparent; flex-shrink: 0;
+}
+.ci-avatar.seen     { background: var(--green-dim); border-color: var(--green-brd); color: var(--green); }
+.ci-avatar.watching { background: var(--yellow-dim); border-color: var(--yellow-brd); color: var(--yellow); }
+
+.catalog-item mark { background: rgba(42,157,143,.28); color: var(--teal-light); border-radius: 2px; padding: 0 2px; }
+.catalog-empty { font-size: 14px; color: var(--low); padding: 16px 0 8px; text-align: center; }
+
+/* ═══════════════════════════════════════════
+   POPUP CATALOGO
+═══════════════════════════════════════════ */
+.popup-overlay {
+    position: fixed; inset: 0; z-index: 500;
+    background: rgba(8,12,24,.78);
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    display: flex; align-items: flex-end; justify-content: center;
+    padding: 0 0 env(safe-area-inset-bottom);
+    animation: overlayIn .2s ease;
+}
+.popup-overlay.closing { animation: overlayOut .2s ease forwards; }
+
+.popup-box {
+    background: linear-gradient(160deg, #1c2540 0%, #111827 100%);
+    border: 1px solid var(--border2);
+    border-radius: 22px 22px 0 0;
+    padding: 28px 22px 32px;
+    width: 100%; max-width: 480px;
+    box-shadow: var(--shadow-popup);
+    animation: popupIn .28s cubic-bezier(.2,.8,.3,1);
+}
+.popup-overlay.closing .popup-box { animation: popupOut .22s ease forwards; }
+
+.popup-handle { width: 36px; height: 4px; background: var(--border2); border-radius: 4px; margin: 0 auto 20px; }
+/* Titolo popup — bianco */
+.popup-title { font-family: var(--font-serif); font-size: 22px; font-weight: 400; color: var(--hi); margin-bottom: 4px; }
+.popup-subtitle { font-size: 13px; color: var(--mid); margin-bottom: 22px; }
+
+.popup-nick-row { display: flex; align-items: center; gap: 8px; margin-bottom: 20px; }
+.popup-nick-row input { flex: 1; }
+
+.popup-stars-label { font-size: 12.5px; font-weight: 700; color: var(--hi); margin-bottom: 10px; letter-spacing: .02em; text-transform: uppercase; font-size: 10.5px; }
+
+/* Bottoni stato */
+.popup-status-row { display: flex; gap: 8px; margin-bottom: 22px; }
+.status-btn {
+    flex: 1; padding: 11px 8px;
+    background: var(--surface2); border: 1.5px solid var(--border);
+    border-radius: 12px; cursor: pointer;
+    font-family: var(--font-sans); font-size: 13px; font-weight: 600;
+    color: var(--mid); text-align: center;
+    transition: all .18s; display: flex; flex-direction: column; align-items: center; gap: 4px;
+}
+.status-btn .sb-icon { font-size: 20px; }
+.status-btn:hover {
+    border-color: var(--border2); color: var(--hi);
+    background: var(--surface3);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,.3);
+}
+.status-btn:active { transform: translateY(0); }
+.status-btn.active-seen    { background: var(--green-dim); border-color: var(--green-brd); color: var(--green); }
+.status-btn.active-watching{ background: var(--yellow-dim); border-color: var(--yellow-brd); color: var(--yellow); }
+/* Resetta — rosso */
+.status-btn-reset { flex: 0.7 !important; }
+.status-btn-reset:hover {
+    background: rgba(248,113,113,.12) !important;
+    border-color: rgba(248,113,113,.4) !important;
+    color: #f87171 !important;
 }
 
-// ============================================
-// ADMIN
-// ============================================
-async function enableAdmin() {
-    const pwd = prompt('Inserisci la password admin:');
-    if (pwd === null) return;
-    try {
-        const snap = await get(ref(db, 'adminHash'));
-        const storedHash = snap.val();
-        if (!storedHash) { alert('Hash admin non configurato su Firebase.'); return; }
-        const inputHash = await hashPassword(pwd);
-        if (inputHash === storedHash) {
-            localStorage.setItem('isAdmin', 'true');
-            isAdminMode = true;
-            renderAdminBtn(); redraw(); renderSuggested(allSuggested);
-            openAdminPanel();
-        } else {
-            alert('Password errata.');
-        }
-    } catch(e) { alert('Errore verifica password: ' + e.message); }
+/* ── STELLE 10 CON MEZZA STELLA SVG ── */
+.popup-stars {
+    display: flex; gap: 4px; margin-bottom: 24px;
+    user-select: none;
 }
-function disableAdmin() {
-    localStorage.removeItem('isAdmin');
-    isAdminMode = false;
-    const panel = document.getElementById('adminPanelOverlay');
-    if (panel) panel.remove();
-    renderAdminBtn(); redraw(); renderSuggested(allSuggested);
+.star-btn {
+    background: none; border: none; cursor: pointer;
+    padding: 2px; line-height: 1; position: relative;
+    width: 28px; height: 28px; flex-shrink: 0;
+    transition: transform .1s;
 }
-function renderAdminBtn() {
-    const btn = document.getElementById('adminToggle');
-    if (!btn) return;
-    btn.textContent = isAdminMode ? '🔓 Admin attivo' : 'Admin';
-    btn.classList.toggle('admin-active', isAdminMode);
+.star-btn:hover { transform: scale(1.15); }
+.star-btn svg { width: 24px; height: 24px; display: block; }
+
+/* Stella vuota */
+.star-btn .star-full { fill: transparent; stroke: #64748b; stroke-width: 1.5; transition: fill .12s, stroke .12s; }
+.star-btn .star-half { fill: transparent; }
+.star-btn .star-half-mask { fill: transparent; }
+
+/* Stella piena */
+.star-btn.lit .star-full  { fill: var(--yellow); stroke: var(--yellow); }
+
+/* Mezza stella — fill solo metà sinistra via clip */
+.star-btn.half-lit .star-full { fill: transparent; stroke: #64748b; stroke-width: 1.5; }
+.star-btn.half-lit .star-half { fill: var(--yellow); }
+
+/* ── */
+.popup-actions { display: flex; gap: 10px; }
+.btn-popup-cancel {
+    flex: 1; padding: 13px;
+    background: var(--surface2); border: 1.5px solid var(--border);
+    border-radius: var(--r-input);
+    font-family: var(--font-sans); font-size: 14px; font-weight: 600;
+    color: var(--mid); cursor: pointer; transition: background .15s;
 }
-
-// ============================================
-// EVADI RICHIESTA
-// ============================================
-async function evade(id, title) {
-    if (!isAdminMode) return;
-    if (!confirm(`Evadere "${title}"?`)) return;
-    try {
-        const snap = await get(ref(db, `requests/${id}`));
-        const data = snap.val();
-        if (!data) { alert('Richiesta non trovata.'); return; }
-        await push(evasedRef, { ...data, status: 'evasa', evadedAt: new Date().toLocaleDateString('it-IT'), evadedTimestamp: Date.now() });
-        await remove(ref(db, `requests/${id}`));
-    } catch (e) { alert('Errore: ' + e.message); }
+.btn-popup-cancel:hover { background: var(--surface3); border-color: var(--border2); }
+.btn-popup-save {
+    flex: 2; padding: 13px;
+    background: linear-gradient(135deg, var(--teal), #1f7a6e);
+    border: none; border-radius: var(--r-input);
+    font-family: var(--font-sans); font-size: 14px; font-weight: 700;
+    color: #fff; cursor: pointer;
+    box-shadow: 0 0 20px var(--teal-glow);
+    transition: opacity .15s;
 }
+.btn-popup-save:hover { opacity: .9; }
+.btn-popup-save:disabled { opacity: .4; cursor: not-allowed; }
 
+.popup-users-section { margin-top: 20px; border-top: 1px solid var(--border); padding-top: 16px; }
+.popup-users-title { font-size: 10.5px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--teal-light); margin-bottom: 12px; }
+.popup-user-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.puf-avatar { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; flex-shrink: 0; }
+.puf-seen     { background: var(--green-dim); color: var(--green); border: 1.5px solid var(--green-brd); }
+.puf-watching { background: var(--yellow-dim); color: var(--yellow); border: 1.5px solid var(--yellow-brd); }
+.puf-info { flex: 1; }
+.puf-name { font-size: 13px; font-weight: 600; color: var(--hi); }
+.puf-meta { font-size: 11.5px; color: var(--low); }
 
-
-// ============================================
-// RENDER RICHIESTE
-// ============================================
-function renderRequests(list) {
-    const el    = document.getElementById('requestsList');
-    const badge = document.getElementById('requestCount');
-    if (!list || !list.length) {
-        badge.textContent = '0';
-        el.innerHTML = `<div class="state-empty"><span class="state-empty-icon">🎬</span>Nessuna richiesta ancora.<br>Sii il primo!</div>`;
-        return;
-    }
-    badge.textContent = list.length;
-    const sorted = [...list].sort((a, b) => b.timestamp - a.timestamp);
-    el.innerHTML = sorted.map(req => `
-        <div class="req-card">
-            <div class="req-top">
-                <span class="req-title">${esc(req.title)}</span>
-                <span class="badge badge-type">${esc(req.type)}</span>
-            </div>
-            <div class="req-meta">
-                <span>👤 <strong>${esc(req.requester)}</strong></span>
-                <span>📅 ${esc(req.date)}</span>
-            </div>
-            ${req.notes ? `<div class="req-notes">${esc(req.notes)}</div>` : ''}
-            ${isAdminMode ? `
-            <div class="req-footer">
-                <button class="btn-evade" data-id="${req.id}" data-title="${esc(req.title)}">Evadi ✓</button>
-            </div>` : ''}
-        </div>
-    `).join('');
-    if (isAdminMode) {
-        el.querySelectorAll('.btn-evade').forEach(b =>
-            b.addEventListener('click', () => evade(b.dataset.id, b.dataset.title))
-        );
-    }
+/* ═══════════════════════════════════════════
+   TAB BAR
+═══════════════════════════════════════════ */
+.tab-bar {
+    display: flex; gap: 4px;
+    background: var(--surface2);
+    border-radius: var(--r-pill); padding: 3px; margin-bottom: 20px;
+    border: 1px solid var(--border);
 }
-
-// ============================================
-// RENDER EVASE
-// ============================================
-function renderEvased(list) {
-    const el    = document.getElementById('requestsList');
-    const badge = document.getElementById('requestCount');
-    if (!list || !list.length) {
-        badge.textContent = '0';
-        el.innerHTML = `<div class="state-empty"><span class="state-empty-icon">✅</span>Nessuna richiesta evasa ancora.</div>`;
-        return;
-    }
-    badge.textContent = list.length;
-    const sorted = [...list].sort((a, b) => b.evadedTimestamp - a.evadedTimestamp);
-    el.innerHTML = sorted.map(req => `
-        <div class="req-card evased">
-            <div class="req-top">
-                <span class="req-title">${esc(req.title)}</span>
-                <div class="req-badges">
-                    <span class="badge badge-done">✓ Aggiunto</span>
-                    <span class="badge badge-type">${esc(req.type)}</span>
-                </div>
-            </div>
-            <div class="req-meta">
-                <span>👤 <strong>${esc(req.requester)}</strong></span>
-                <span>✓ ${esc(req.evadedAt)}</span>
-                <span>👍 ${req.votes || 0} voti</span>
-            </div>
-            ${req.notes ? `<div class="req-notes">${esc(req.notes)}</div>` : ''}
-        </div>
-    `).join('');
+.tab {
+    flex: 1; padding: 8px; font-family: var(--font-sans);
+    font-size: 13.5px; font-weight: 500; color: var(--low);
+    background: none; border: none;
+    border-radius: calc(var(--r-pill) - 3px); cursor: pointer;
+    transition: background .18s, color .18s;
 }
+.tab:hover { color: var(--mid); }
+.tab.active { background: var(--surface3); color: var(--hi); font-weight: 700; box-shadow: 0 2px 8px rgba(0,0,0,.25); }
 
-function redraw() {
-    if (currentTab === 'evased') renderEvased(allEvased);
-    else renderRequests(allRequests);
+/* ═══════════════════════════════════════════
+   REQUEST CARDS
+═══════════════════════════════════════════ */
+.requests-list { display: flex; flex-direction: column; gap: 10px; width: 100%; }
+
+.req-card {
+    border: 1px solid var(--border);
+    border-radius: 13px; padding: 16px;
+    background: var(--surface);
+    backdrop-filter: blur(6px);
+    transition: border-color .18s;
+    animation: fadeSlideIn .22s ease;
+    position: relative; overflow: hidden;
 }
+.req-card::before {
+    content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+    background: linear-gradient(180deg, var(--teal-light), var(--teal));
+    border-radius: 3px 0 0 3px;
+}
+.req-card:hover { border-color: var(--teal-dim2); }
+.req-card.evased::before { background: linear-gradient(180deg, var(--green), #059669); }
+.req-card.evased { border-color: var(--green-brd); }
 
-// ============================================
-// FIREBASE — RICHIESTE
-// ============================================
-onValue(requestsRef, snap => {
-    const raw = snap.val();
-    allRequests = raw ? Object.entries(raw).map(([id, val]) => ({ id, ...val })) : [];
-    if (currentTab !== 'evased') renderRequests(allRequests);
-    if (window._apRenderReq) window._apRenderReq();
-});
+.req-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 8px; padding-left: 10px; }
+/* Titolo richiesta — bianco */
+.req-title { font-size: 16px; font-weight: 700; color: var(--hi); line-height: 1.3; flex: 1; }
+.req-badges { display: flex; gap: 5px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
+.badge { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: var(--r-pill); white-space: nowrap; }
+.badge-type { background: var(--surface3); color: var(--mid); border: 1px solid var(--border2); }
 
-onValue(evasedRef, snap => {
-    const raw = snap.val();
-    allEvased = raw ? Object.entries(raw).map(([id, val]) => ({ id, ...val })) : [];
-    if (currentTab === 'evased') renderEvased(allEvased);
-    if (window._apRenderEv) window._apRenderEv();
-});
+.badge-done { background: var(--green-dim); color: var(--green); border: 1px solid var(--green-brd); }
 
-// ============================================
-// FORM SUBMIT RICHIESTA
-// ============================================
-document.getElementById('requestForm').addEventListener('submit', async function(e) {
-    e.preventDefault();
-    const btn = this.querySelector('.btn-submit');
-    btn.disabled = true;
-    btn.querySelector('.btn-submit-text').textContent = 'Invio…';
-    const titleVal     = document.getElementById('title').value.trim();
-    const typeVal      = document.getElementById('type').value;
-    const requesterVal = document.getElementById('requester').value.trim();
+.req-meta { font-size: 12.5px; color: var(--low); display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 10px; padding-left: 10px; }
+.req-meta strong { color: var(--mid); font-weight: 600; }
+.req-notes { font-size: 13px; color: var(--mid); font-style: italic; padding: 10px 12px; background: var(--surface2); border-radius: 8px; margin: 0 0 10px 10px; line-height: 1.5; border-left: 2px solid var(--teal-dim2); }
 
-    // Validazione campi obbligatori
-    let reqError = '';
-    if (!titleVal)     reqError = 'Inserisci il titolo.';
-    else if (!typeVal) reqError = 'Seleziona il tipo (Film o Serie TV).';
-    else if (!requesterVal) reqError = 'Inserisci il tuo nickname.';
-    if (reqError) {
-        showFormError('requestForm', reqError);
-        btn.disabled = false;
-        btn.querySelector('.btn-submit-text').textContent = 'Invia richiesta';
-        return;
-    }
+.req-footer { display: flex; align-items: center; padding: 10px 0 0 10px; border-top: 1px solid var(--border); }
 
-    const payload = {
-        title:     titleVal,
-        type:      typeVal,
-        requester: requesterVal,
-        notes:     document.getElementById('notes').value.trim(),
-        date:      new Date().toLocaleDateString('it-IT', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }),
-        timestamp: Date.now()
-    };
-    try {
-        await push(requestsRef, payload);
-        this.reset();
-        showToast('Richiesta inviata con successo!');
-        // Notifica email (se EmailJS configurato)
-        if (typeof window.sendNewRequestEmail === 'function') {
-            window.sendNewRequestEmail(payload.title, payload.type, payload.requester, payload.notes);
-        }
-    } catch (err) {
-        alert('Errore: ' + err.message);
-    } finally {
-        btn.disabled = false;
-        btn.querySelector('.btn-submit-text').textContent = 'Invia richiesta';
-    }
-});
+.btn-evade {
+    margin-left: auto; font-family: var(--font-sans); font-size: 12.5px; font-weight: 600;
+    padding: 7px 15px; border-radius: var(--r-pill);
+    border: 1.5px solid var(--green-brd); background: var(--green-dim); color: var(--green);
+    cursor: pointer; transition: background .15s;
+}
+.btn-evade:hover { background: rgba(52,211,153,.22); }
 
-// ============================================
-// TAB BAR RICHIESTE
-// ============================================
-document.querySelectorAll('.tab[data-sort]').forEach(tab => {
-    tab.addEventListener('click', function() {
-        document.querySelectorAll('.tab[data-sort]').forEach(t => t.classList.remove('active'));
-        this.classList.add('active');
-        currentTab = this.dataset.sort;
-        redraw();
-    });
-});
+/* ═══════════════════════════════════════════
+   SEZIONE CONSIGLIATI
+═══════════════════════════════════════════ */
+.sugg-form { margin-bottom: 4px; }
 
-// ============================================
-// ADMIN TOGGLE
-// ============================================
-document.getElementById('adminToggle').addEventListener('click', () => {
-    if (!isAdminMode) { enableAdmin(); return; }
-    // se già admin: toggle pannello
-    const existing = document.getElementById('adminPanelOverlay');
-    if (existing) existing.remove();
-    else openAdminPanel();
-});
-
-// ============================================
-// CATALOGO — POPUP
-// ============================================
-let popupCurrentTitle   = null;
-let popupSelectedStatus = null;
-let popupSelectedRating = 0;
-
-// ============================================
-// POPUP CARTELLA — applica a tutti i figli
-// ============================================
-function openFolderPopup(folder) {
-    const folderTitle = folder.dataset.title;
-    const subitems    = Array.from(folder.querySelectorAll('.catalog-subitem'));
-    if (!subitems.length) {
-        // Nessun figlio — apri popup normale sulla cartella stessa
-        openCatalogPopup(folderTitle);
-        return;
-    }
-
-    let selectedStatus = null;
-    let selectedRating = 0;
-
-    const overlay = document.getElementById('catalogPopupOverlay');
-    const pts = '12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26';
-
-    overlay.innerHTML = `
-        <div class="popup-box" id="popupBox">
-            <div class="popup-handle"></div>
-            <div class="popup-title">${esc(folderTitle)}</div>
-            <div class="popup-subtitle">Applica a tutto il contenuto della cartella</div>
-
-            <div class="popup-nick-row">
-                <div class="field" style="flex:1;gap:5px">
-                    <label style="font-size:12px">Nickname</label>
-                    <input type="text" id="popupNick" placeholder="Lorem Ipsum" value="${esc(getNickname())}" autocomplete="off" maxlength="20">
-                </div>
-            </div>
-
-            <div class="popup-stars-label">Stato per tutti i titoli</div>
-            <div class="popup-status-row">
-                <button class="status-btn" data-status="seen"><span class="sb-icon">✅</span> Visto</button>
-                <button class="status-btn" data-status="watching"><span class="sb-icon">▶️</span> In corso</button>
-                <button class="status-btn status-btn-reset" data-status="none"><span class="sb-icon">✕</span> Resetta</button>
-            </div>
-
-            <div class="popup-stars-label">Voto uguale per tutti <span style="font-size:10px;color:var(--low);font-weight:400;text-transform:none;letter-spacing:0">(opzionale)</span></div>
-            <div class="popup-stars" id="popupStars">
-                ${Array.from({length:10}, (_, i) => {
-                    const val = i + 1;
-                    const uid = 'fp_' + Math.random().toString(36).slice(2,7);
-                    return '<button class="star-btn" data-val="' + val + '" title="' + val + '/10">'
-                        + '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">'
-                        + '<defs><clipPath id="' + uid + '"><rect x="0" y="0" width="12" height="24"/></clipPath></defs>'
-                        + '<polygon class="star-full" points="' + pts + '"/>'
-                        + '<polygon class="star-half" points="' + pts + '" clip-path="url(#' + uid + ')"/>'
-                        + '</svg></button>';
-                }).join('')}
-            </div>
-
-            <div class="popup-actions">
-                <button class="btn-popup-cancel" id="popupCancel">Annulla</button>
-                <button class="btn-popup-save" id="popupSave">Applica a tutti</button>
-            </div>
-            <button class="btn-watchlist-toggle" id="popupFolderWatchlist">♡ Aggiungi cartella alla watchlist</button>
-        </div>`;
-
-    overlay.style.display = 'flex';
-    overlay.classList.remove('closing');
-    addSwipeToClose(overlay);
-
-    // Stato cuore watchlist cartella
-    function refreshFolderWlBtn() {
-        const btn = overlay.querySelector('#popupFolderWatchlist');
-        if (!btn) return;
-        const inWl = isInWatchlist(folderTitle);
-        btn.textContent = inWl ? '♥ In watchlist' : '♡ Aggiungi cartella alla watchlist';
-        btn.classList.toggle('btn-watchlist-toggle-active', inWl);
-    }
-    refreshFolderWlBtn();
-
-    overlay.querySelector('#popupFolderWatchlist').addEventListener('click', async () => {
-        const nick = document.getElementById('popupNick').value.trim();
-        if (!nick) { alert('Inserisci prima il tuo nickname.'); return; }
-        saveNickname(nick);
-        const btn  = overlay.querySelector('#popupFolderWatchlist');
-        btn.disabled = true; btn.textContent = 'Salvataggio…';
-        try {
-            await toggleWatchlist(folderTitle, folderTitle);
-            refreshFolderWlBtn();
-        } catch(e) { alert('Errore: ' + e.message); }
-        finally { btn.disabled = false; }
-    });
-
-    // Stelle
-    function applyStarClasses(btns, activeRating) {
-        btns.forEach(b => {
-            const v = parseFloat(b.dataset.val);
-            b.classList.remove('lit','half-lit');
-            if (activeRating >= v)            b.classList.add('lit');
-            else if (activeRating >= v - 0.5) b.classList.add('half-lit');
-        });
-    }
-    const starBtns = Array.from(overlay.querySelectorAll('.star-btn'));
-    starBtns.forEach(btn => {
-        btn.addEventListener('click', e => {
-            const v = parseFloat(btn.dataset.val);
-            const rect = btn.getBoundingClientRect();
-            const half = (e.clientX - rect.left) < rect.width / 2;
-            const chosen = half ? v - 0.5 : v;
-            selectedRating = (selectedRating === chosen) ? 0 : chosen;
-            applyStarClasses(starBtns, selectedRating);
-        });
-        btn.addEventListener('mousemove', e => {
-            const v = parseFloat(btn.dataset.val);
-            const rect = btn.getBoundingClientRect();
-            applyStarClasses(starBtns, (e.clientX - rect.left) < rect.width / 2 ? v - 0.5 : v);
-        });
-        btn.addEventListener('mouseleave', () => applyStarClasses(starBtns, selectedRating));
-    });
-
-    // Stato
-    overlay.querySelectorAll('.status-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const s = btn.dataset.status;
-            selectedStatus = s === 'none' ? null : s;
-            overlay.querySelectorAll('.status-btn').forEach(b => b.classList.remove('active-seen','active-watching'));
-            if (selectedStatus === 'seen')     btn.classList.add('active-seen');
-            if (selectedStatus === 'watching') btn.classList.add('active-watching');
-        });
-    });
-
-    // Salva — applica a tutti i figli
-    overlay.querySelector('#popupSave').addEventListener('click', async () => {
-        const nick = document.getElementById('popupNick').value.trim();
-        if (!nick) { alert('Inserisci il tuo nickname.'); return; }
-        saveNickname(nick);
-
-        const saveBtn = overlay.querySelector('#popupSave');
-        saveBtn.disabled = true;
-        saveBtn.textContent = 'Salvataggio…';
-
-        try {
-            const updates = {};
-            for (const li of subitems) {
-                const subTitle  = li.dataset.title;
-                const fbTitle   = folderTitle + ' — ' + subTitle;
-                const key       = titleToKey(fbTitle);
-                const userPath  = 'catalog/' + key + '/users/' + nick;
-                if (!selectedStatus) {
-                    await remove(ref(db, userPath));
-                } else {
-                    updates[userPath] = {
-                        status:    selectedStatus,
-                        rating:    selectedRating || null,
-                        updatedAt: Date.now()
-                    };
-                }
-            }
-            for (const [path, val] of Object.entries(updates)) {
-                await set(ref(db, path), val);
-            }
-            closePopup();
-        } catch(e) {
-            alert('Errore: ' + e.message);
-            saveBtn.disabled = false;
-            saveBtn.textContent = 'Applica a tutti';
-        }
-    });
-
-    overlay.querySelector('#popupCancel').addEventListener('click', closePopup);
-    overlay.addEventListener('click', e => { if (e.target === overlay) closePopup(); });
+.sugg-list {
+    display: flex; flex-direction: column; gap: 6px; margin-top: 4px;
 }
 
-function openCatalogPopup(title, parentTitle = null) {
-    // Per i sub-item (stagioni), usa 'Parent — Titolo' come chiave Firebase
-    const firebaseTitle = parentTitle ? parentTitle + ' — ' + title : title;
-    popupCurrentTitle   = firebaseTitle;  // chiave univoca per Firebase
-    popupSelectedStatus = null;
-    popupSelectedRating = 0;
+.sugg-item {
+    display: flex; flex-direction: column;
+    padding: 12px 14px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    animation: fadeSlideIn .2s ease;
+    gap: 6px; position: relative;
+    transition: border-color .15s, background .15s;
+}
+.sugg-item:hover { border-color: var(--teal-dim2); background: var(--surface3); }
 
-    const key       = titleToKey(firebaseTitle);
-    const titleData = catalogData[key] || {};
-    const users     = titleData.users || {};
-    const myNick    = getNickname();
-    const myData    = myNick ? (users[myNick] || {}) : {};
+/* info wrapper titolo + autore */
+.sugg-info { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.sugg-title { font-size: 15px; font-weight: 700; color: var(--hi); word-break: break-word; }
+.sugg-by    { font-size: 12px; color: var(--teal-light); font-weight: 600; white-space: nowrap; }
 
-    if (myData.status) popupSelectedStatus = myData.status;
-    if (myData.rating) popupSelectedRating = myData.rating;
+.sugg-delete {
+    background: none; border: none; cursor: pointer;
+    color: var(--low); font-size: 16px; padding: 0 2px;
+    transition: color .15s; flex-shrink: 0; line-height: 1;
+}
+.sugg-delete:hover { color: #f87171; }
 
-    const avg       = avgRating(users);
-    const seenList  = Object.entries(users).filter(([, u]) => u.status === 'seen');
-    const watchList = Object.entries(users).filter(([, u]) => u.status === 'watching');
+/* ── CLASSIFICA ── */
+.sugg-medal { font-size: 20px; line-height: 1; }
+.sugg-rank  { font-size: 12px; font-weight: 700; color: var(--low); min-width: 20px; }
 
-    const overlay = document.getElementById('catalogPopupOverlay');
-    const pts = '12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26';
+/* top 3 card con bordo colorato */
+.sugg-top   { border-left: 3px solid transparent; }
+.sugg-top-1 { border-left-color: #ffd700; background: rgba(255,215,0,.06); }
+.sugg-top-2 { border-left-color: #c0c0c0; background: rgba(192,192,192,.05); }
+.sugg-top-3 { border-left-color: #cd7f32; background: rgba(205,127,50,.05); }
 
-    overlay.innerHTML = `
-        <div class="popup-box" id="popupBox">
-            <div class="popup-handle"></div>
-            <div class="popup-title">${esc(parentTitle ? parentTitle + ' — ' + title : title)}</div>
-            <div class="popup-subtitle">${avg ? `Media voti: ${starsHtml(avg, 11)}` : 'Nessun voto ancora'}</div>
-
-            <div class="popup-nick-row">
-                <div class="field" style="flex:1;gap:5px">
-                    <label style="font-size:12px">Nickname</label>
-                    <input type="text" id="popupNick" placeholder="Lorem Ipsum" value="${esc(myNick)}" autocomplete="off" maxlength="20">
-                </div>
-            </div>
-
-            <div class="popup-stars-label">Il tuo stato</div>
-            <div class="popup-status-row">
-                <button class="status-btn ${popupSelectedStatus === 'seen' ? 'active-seen' : ''}" data-status="seen">
-                    <span class="sb-icon">✅</span> Visto
-                </button>
-                <button class="status-btn ${popupSelectedStatus === 'watching' ? 'active-watching' : ''}" data-status="watching">
-                    <span class="sb-icon">▶️</span> In corso
-                </button>
-                <button class="status-btn status-btn-reset" data-status="none">
-                    <span class="sb-icon">✕</span> Resetta
-                </button>
-            </div>
-
-            <div class="popup-stars-label">Il tuo voto <span style="font-size:10px;color:var(--low);font-weight:400;text-transform:none;letter-spacing:0">(½ cliccando la metà sinistra)</span></div>
-            <div class="popup-stars" id="popupStars">
-                ${Array.from({ length: 10 }, (_, i) => {
-                    const val = i + 1;
-                    const uid = 'sp_' + Math.random().toString(36).slice(2,9);
-                    let cls = '';
-                    if (popupSelectedRating >= val)            cls = 'lit';
-                    else if (popupSelectedRating >= val - 0.5) cls = 'half-lit';
-                    return `<button class="star-btn ${cls}" data-val="${val}" title="${val}/10">`
-                        + `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">`
-                        + `<defs><clipPath id="${uid}"><rect x="0" y="0" width="12" height="24"/></clipPath></defs>`
-                        + `<polygon class="star-full" points="${pts}"/>`
-                        + `<polygon class="star-half" points="${pts}" clip-path="url(#${uid})"/>`
-                        + `</svg></button>`;
-                }).join('')}
-            </div>
-
-            <div class="popup-actions">
-                <button class="btn-popup-cancel" id="popupCancel">Annulla</button>
-                <button class="btn-popup-save" id="popupSave">Salva</button>
-            </div>
-            <button class="btn-watchlist-toggle" id="popupWatchlist"
-                data-firebase-title="${esc(firebaseTitle)}">
-                ${isInWatchlist(firebaseTitle) ? '♥ Nella watchlist' : '♡ Aggiungi alla watchlist'}
-            </button>
-
-            ${(seenList.length || watchList.length) ? `
-            <div class="popup-users-section">
-                ${seenList.length ? `<div class="popup-users-title">Chi l'ha visto</div>` : ''}
-                ${seenList.map(([nick, u]) => `
-                    <div class="popup-user-row">
-                        <div class="puf-avatar puf-seen">${esc(nick[0].toUpperCase())}</div>
-                        <div class="puf-info">
-                            <div class="puf-name">${esc(nick)}</div>
-                            <div class="puf-meta">${u.rating ? `Voto: ${starsHtml(u.rating, 11)}` : 'Nessun voto'}</div>
-                        </div>
-                    </div>`).join('')}
-                ${watchList.length ? `<div class="popup-users-title" style="margin-top:14px">In corso</div>` : ''}
-                ${watchList.map(([nick, u]) => `
-                    <div class="popup-user-row">
-                        <div class="puf-avatar puf-watching">${esc(nick[0].toUpperCase())}</div>
-                        <div class="puf-info">
-                            <div class="puf-name">${esc(nick)}</div>
-                            <div class="puf-meta">${u.rating ? `Voto: ${starsHtml(u.rating, 11)}` : 'Nessun voto'}</div>
-                        </div>
-                    </div>`).join('')}
-            </div>` : ''}
-        </div>`;
-
-    overlay.style.display = 'flex';
-    overlay.classList.remove('closing');
-    addSwipeToClose(overlay);
-
-    // Stelle
-    function applyStarClasses(btns, activeRating) {
-        btns.forEach(b => {
-            const v = parseFloat(b.dataset.val);
-            b.classList.remove('lit', 'half-lit');
-            if (activeRating >= v)          b.classList.add('lit');
-            else if (activeRating >= v - 0.5) b.classList.add('half-lit');
-        });
-    }
-    const starBtns = Array.from(overlay.querySelectorAll('.star-btn'));
-    applyStarClasses(starBtns, popupSelectedRating);
-    starBtns.forEach(btn => {
-        btn.addEventListener('click', e => {
-            const v    = parseFloat(btn.dataset.val);
-            const rect = btn.getBoundingClientRect();
-            const half = (e.clientX - rect.left) < rect.width / 2;
-            const chosen = half ? v - 0.5 : v;
-            popupSelectedRating = (popupSelectedRating === chosen) ? 0 : chosen;
-            applyStarClasses(starBtns, popupSelectedRating);
-        });
-        btn.addEventListener('mousemove', e => {
-            const v    = parseFloat(btn.dataset.val);
-            const rect = btn.getBoundingClientRect();
-            const half = (e.clientX - rect.left) < rect.width / 2;
-            applyStarClasses(starBtns, half ? v - 0.5 : v);
-        });
-        btn.addEventListener('mouseleave', () => applyStarClasses(starBtns, popupSelectedRating));
-    });
-
-    // Stato
-    overlay.querySelectorAll('.status-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const s = btn.dataset.status;
-            popupSelectedStatus = (s === 'none') ? null : s;
-            overlay.querySelectorAll('.status-btn').forEach(b => b.classList.remove('active-seen', 'active-watching'));
-            if (popupSelectedStatus === 'seen')     btn.classList.add('active-seen');
-            if (popupSelectedStatus === 'watching') btn.classList.add('active-watching');
-        });
-    });
-
-    overlay.querySelector('#popupSave').addEventListener('click', saveCatalogEntry);
-    overlay.querySelector('#popupCancel').addEventListener('click', closePopup);
-    overlay.addEventListener('click', e => { if (e.target === overlay) closePopup(); });
-
-    // Cuore watchlist
-    const wlBtn = overlay.querySelector('#popupWatchlist');
-    if (wlBtn) {
-        wlBtn.addEventListener('click', async () => {
-            const ft = wlBtn.dataset.firebaseTitle;
-            const displayT = parentTitle ? parentTitle + ' — ' + title : title;
-            await toggleWatchlist(ft, displayT);
-            wlBtn.textContent = isInWatchlist(ft) ? '♥ Nella watchlist' : '♡ Aggiungi alla watchlist';
-            wlBtn.classList.toggle('btn-watchlist-toggle-active', isInWatchlist(ft));
-        });
-        wlBtn.classList.toggle('btn-watchlist-toggle-active', isInWatchlist(firebaseTitle));
-    }
+/* ── Voto stelline consigliati ── */
+.sugg-score-wrap {
+    display: flex; align-items: center;
 }
 
-function closePopup() {
-    const overlay = document.getElementById('catalogPopupOverlay');
-    overlay.classList.add('closing');
-    setTimeout(() => { overlay.style.display = 'none'; overlay.classList.remove('closing'); }, 220);
+/* 10 stelline cliccabili */
+.sugg-stars-input {
+    display: flex; gap: 3px; align-items: center; flex-wrap: nowrap;
+}
+.ssb {
+    background: none; border: none; cursor: pointer; padding: 1px;
+    font-size: 17px; color: #475569; transition: color .1s;
+    line-height: 1; position: relative;
+}
+.ssb.lit      { color: var(--yellow); }
+.ssb.half-lit { color: #475569; }  /* gestita via JS con SVG */
+
+/* badge "tuo" */
+.sugg-own-badge {
+    font-size: 10px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+    color: var(--hi); background: var(--surface3); border: 1px solid var(--border2);
+    padding: 2px 7px; border-radius: var(--r-pill);
 }
 
-function addSwipeToClose(overlay) {
-    const box = overlay.querySelector('.popup-box');
-    if (!box) return;
-    let startY = 0, startX = 0, isDragging = false;
+/* punteggio già votato */
+.sugg-voted-score { text-align: center; }
 
-    box.addEventListener('touchstart', e => {
-        // Solo se il tocco inizia nella zona superiore (handle o titolo)
-        const touch = e.touches[0];
-        startY = touch.clientY;
-        startX = touch.clientX;
-        isDragging = true;
-        box.style.transition = 'none';
-    }, { passive: true });
+/* media voti */
+.sugg-avg {
+    display: flex; align-items: center; gap: 6px;
+    flex-wrap: nowrap;
+}
+.sugg-avg span[style] { flex-shrink: 0; }
+.sugg-avg-num  { font-size: 13px; font-weight: 700; color: var(--yellow); white-space: nowrap; }
+.sugg-avg-ct   { font-size: 12px; color: var(--low); white-space: nowrap; }
+.sugg-avg-none { font-size: 12px; color: var(--low); font-style: italic; }
 
-    box.addEventListener('touchmove', e => {
-        if (!isDragging) return;
-        const dy = e.touches[0].clientY - startY;
-        const dx = Math.abs(e.touches[0].clientX - startX);
-        if (dy > 0 && dx < 50) {
-            box.style.transform = `translateY(${dy}px)`;
-            box.style.opacity   = Math.max(0, 1 - dy / 300);
-        }
-    }, { passive: true });
+/* vista per persona */
+.sugg-person-block { margin-bottom: 16px; }
+.sugg-person-block:last-child { margin-bottom: 0; }
+.sugg-person-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.sugg-person-avatar {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: var(--teal-dim); border: 1.5px solid var(--teal-dim2);
+    color: var(--teal-light); font-size: 12px; font-weight: 800;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.sugg-person-name  { font-size: 14px; font-weight: 700; color: var(--hi); }
+.sugg-person-count { font-size: 11px; color: var(--low); }
+.sugg-person-items { display: flex; flex-direction: column; gap: 5px; }
 
-    box.addEventListener('touchend', e => {
-        if (!isDragging) return;
-        isDragging = false;
-        const dy = e.changedTouches[0].clientY - startY;
-        box.style.transition = '';
-        box.style.transform  = '';
-        box.style.opacity    = '';
-        if (dy > 80) closePopup();
-    }, { passive: true });
+.sugg-empty { text-align: center; padding: 28px 20px; color: var(--low); font-size: 14px; }
+
+/* ═══════════════════════════════════════════
+   STATI
+═══════════════════════════════════════════ */
+.state-loading { display: flex; align-items: center; gap: 10px; justify-content: center; padding: 40px; color: var(--low); font-size: 14px; }
+.spinner { width: 18px; height: 18px; border: 2px solid var(--border2); border-top-color: var(--teal); border-radius: 50%; animation: spin .7s linear infinite; flex-shrink: 0; }
+.state-empty { text-align: center; padding: 40px 20px; color: var(--low); font-size: 14px; line-height: 1.8; }
+.state-empty-icon { font-size: 32px; display: block; margin-bottom: 8px; }
+
+
+
+/* ═══════════════════════════════════════════
+   ANIMAZIONI
+═══════════════════════════════════════════ */
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes fadeSlideIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes overlayIn  { from { opacity: 0; } to { opacity: 1; } }
+@keyframes overlayOut { from { opacity: 1; } to { opacity: 0; } }
+@keyframes popupIn  { from { opacity: 0; transform: translateY(60px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes popupOut { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(60px); } }
+
+/* ═══════════════════════════════════════════
+   RESPONSIVE
+═══════════════════════════════════════════ */
+/* ═══════════════════════════════════════════
+   MOBILE FIRST — ottimizzazioni telefono
+═══════════════════════════════════════════ */
+
+/* Base mobile: padding ridotto, touch target grandi */
+@media (max-width: 520px) {
+    body { padding-bottom: 0; }
+
+    /* Hero più compatto */
+    .hero { padding: 24px 14px 20px; }
+    .hero-title { font-size: clamp(26px, 7vw, 38px); }
+    .hero-sub { font-size: 14px; }
+
+    /* Main con meno margini */
+    .main { padding: 0 10px 40px; gap: 12px; }
+    .card { padding: 18px 14px; border-radius: 14px; }
+
+    /* Form: tutto su colonna singola */
+    .field-row { grid-template-columns: 1fr; }
+    .field--sm { min-width: unset; max-width: unset; }
+
+    /* Bottone submit più alto per touch */
+    .btn-submit { padding: 16px; font-size: 16px; }
+
+    /* Catalogo: 1 colonna su mobile piccolo */
+    .catalog-list { grid-template-columns: 1fr; }
+    .catalog-item { padding: 12px 12px; }
+    .ci-name { font-size: 14px; }
+
+    /* Categorie accordion */
+    .catalog-cat-btn { padding: 16px 0; }
+    .cat-name { font-size: 16px; }
+
+    /* Tab bar */
+    .tab-bar { padding: 3px; }
+    .tab { padding: 10px 6px; font-size: 13px; }
+    .catalog-tab { padding: 10px 6px; font-size: 13px; }
+
+    /* Richieste */
+    .req-top { flex-wrap: wrap; gap: 6px; }
+    .req-badges { justify-content: flex-start; }
+    .req-title { font-size: 15px; }
+    .req-footer { gap: 8px; }
+    .btn-evade { margin-left: 0; width: 100%; justify-content: center; }
+    .btn-vote { padding: 9px 16px; font-size: 13px; }
+
+    /* Popup — occupa quasi tutto lo schermo */
+    .popup-box { padding: 20px 14px 28px; border-radius: 20px 20px 0 0; }
+    .popup-title { font-size: 19px; }
+    .popup-status-row { gap: 6px; }
+    .status-btn { padding: 10px 4px; font-size: 12px; }
+    .status-btn .sb-icon { font-size: 18px; }
+    .popup-stars { gap: 2px; }
+    .star-btn { width: 26px; height: 26px; }
+    .star-btn svg { width: 22px; height: 22px; }
+
+    /* Classifica consigliati */
+    .sugg-item { padding: 12px 12px; }
+    .sugg-title { font-size: 14px; }
+    .ssb { font-size: 20px !important; }
+
+    /* Watchlist */
+    .watchlist-nick-bar { flex-direction: column; }
+    .btn-watchlist-nick { width: 100%; text-align: center; }
+
+    /* Pannello admin */
+    .admin-panel { max-height: 92vh; border-radius: 16px; }
+    .admin-tab { font-size: 11px; padding: 6px 10px; }
+    .ap-cat-layout { flex-direction: column; }
+    .ap-cat-sidebar { width: 100%; flex-direction: row; flex-wrap: wrap; gap: 6px; }
+    .ap-cat-sidebar input, .ap-cat-sidebar select { font-size: 14px; }
+    .ap-cat-list-tall { max-height: 200px; }
+    .ap-sidebar-divider { width: 100%; }
+    .ap-sidebar-title { width: 100%; }
+    .ap-btn-full { flex: 1 1 100%; }
+
+    /* Contatori */
+    .ap-counter-row { flex-wrap: wrap; }
+    .ap-counter-row input { flex: 1; min-width: 80px; }
+
+    /* Top nav */
+    .topnav-inner { height: 48px; }
+    .brand-name { font-size: 14px; }
+    .btn-admin { font-size: 11.5px; padding: 5px 12px; }
+
+    /* Consigliati form */
+    .sugg-form-stars { gap: 2px; }
 }
 
-async function saveCatalogEntry() {
-    const nick = document.getElementById('popupNick').value.trim();
-    if (!nick) { alert('Inserisci Nickname.'); return; }
-    saveNickname(nick);
-    const key     = titleToKey(popupCurrentTitle);
-    const userRef = ref(db, `catalog/${key}/users/${nick}`);
-    const saveBtn = document.getElementById('popupSave');
-    saveBtn.disabled = true;
-    saveBtn.textContent = 'Salvataggio…';
-    try {
-        if (!popupSelectedStatus) {
-            await remove(userRef);
-        } else {
-            await set(userRef, { status: popupSelectedStatus, rating: popupSelectedRating || null, updatedAt: Date.now() });
-        }
-        closePopup();
-    } catch (e) {
-        alert('Errore: ' + e.message);
-        saveBtn.disabled = false;
-        saveBtn.textContent = 'Salva';
-    }
+/* Schermo medio (phablet) */
+@media (min-width: 521px) and (max-width: 680px) {
+    .catalog-list { grid-template-columns: 1fr 1fr; }
+    .main { padding: 0 14px 48px; }
 }
 
-// ============================================
-// CATALOGO — AGGIORNA CARTELLA UI (media sub-item)
-// ============================================
-function updateFolderUI(folder) {
-    const parent    = folder.dataset.title;
-    const key       = titleToKey(parent);
-    const subitems  = Array.from(folder.querySelectorAll('.catalog-subitem'));
-
-    // Calcola media voti tra tutti i sub-item
-    let allRatings = [];
-    let seenNicks  = new Set();
-    let watchNicks = new Set();
-
-    subitems.forEach(li => {
-        const subFbTitle = parent + ' — ' + li.dataset.title;
-        const subKey     = titleToKey(subFbTitle);
-        const subData    = catalogData[subKey] || {};
-        const users   = subData.users || {};
-        Object.entries(users).forEach(([nick, u]) => {
-            if (u.rating) allRatings.push(u.rating);
-            if (u.status === 'seen')     seenNicks.add(nick);
-            if (u.status === 'watching') watchNicks.add(nick);
-        });
-    });
-
-    const avg = allRatings.length
-        ? Math.round((allRatings.reduce((a,b)=>a+b,0)/allRatings.length)*2)/2
-        : null;
-
-    // Aggiorna ci-main della cartella
-    const ciMain = folder.querySelector(':scope > .ci-main');
-    const nameSpan = ciMain.querySelector('.ci-name');
-    const plainName = nameSpan.textContent;
-    const toggle = folder.classList.contains('folder-open') ? '▼' : '▶';
-
-    // Aggiorna stelle media
-    let starsEl = ciMain.querySelector('.ci-stars');
-    if (!starsEl) {
-        starsEl = document.createElement('span');
-        starsEl.className = 'ci-stars';
-        const toggleEl = ciMain.querySelector('.ci-folder-toggle');
-        if (toggleEl) ciMain.insertBefore(starsEl, toggleEl);
-        else ciMain.appendChild(starsEl);
-    }
-    starsEl.textContent = avg ? avg.toFixed(1) + '★' : '';
-
-    // Avatar (iniziali) nella cartella — solo icone, niente colore di sfondo
-    let avatarDiv = folder.querySelector(':scope > .ci-folder-avatars');
-    if (!avatarDiv) {
-        avatarDiv = document.createElement('div');
-        avatarDiv.className = 'ci-folder-avatars';
-        // Inserisci dopo ci-main
-        const folderList = folder.querySelector('.ci-folder-list');
-        folder.insertBefore(avatarDiv, folderList);
-    }
-    const allSeen    = [...seenNicks];
-    const allWatch   = [...watchNicks];
-    if (allSeen.length || allWatch.length) {
-        avatarDiv.innerHTML = [
-            ...allSeen.map(n  => `<div class="ci-avatar seen"    title="${esc(n)} — Visto"    data-tooltip="${esc(n)}">${esc(n[0].toUpperCase())}</div>`),
-            ...allWatch.map(n => `<div class="ci-avatar watching" title="${esc(n)} — In corso" data-tooltip="${esc(n)}">${esc(n[0].toUpperCase())}</div>`)
-        ].join('');
-    } else {
-        avatarDiv.innerHTML = '';
-    }
+/* Desktop: popup centrato */
+@media (min-width: 480px) {
+    .popup-overlay { align-items: center; padding: 20px; }
+    .popup-box { border-radius: 22px; }
 }
 
-// ============================================
-// CATALOGO — AGGIORNA ITEM UI
-// ============================================
-function updateCatalogItemUI(li) {
-    const title     = li.dataset.title;
-    const parent    = li.dataset.parent || null;
-    const fbTitle   = parent ? parent + ' — ' + title : title;
-    const key       = titleToKey(fbTitle);
-    const data      = catalogData[key] || {};
-    const users     = data.users || {};
-    const avg       = avgRating(users);
-    const seenUsers = Object.entries(users).filter(([, u]) => u.status === 'seen');
-    const watchUsers= Object.entries(users).filter(([, u]) => u.status === 'watching');
-
-    const ciMain   = li.querySelector('.ci-main');
-    const nameSpan = ciMain.querySelector('.ci-name');
-    const plainName = nameSpan.textContent;
-
-    ciMain.innerHTML = `
-        <span class="ci-name">${plainName}</span>
-        ${avg ? `<span class="ci-stars">${avg.toFixed(1)}★</span>` : ''}
-    `;
-
-    let avatarDiv = li.querySelector('.ci-avatars');
-    if (!avatarDiv) { avatarDiv = document.createElement('div'); avatarDiv.className = 'ci-avatars'; li.appendChild(avatarDiv); }
-    avatarDiv.innerHTML = [...seenUsers.map(([n]) => `<div class="ci-avatar seen" title="${esc(n)} — Visto" data-tooltip="${esc(n)}">${esc(n[0].toUpperCase())}</div>`),
-        ...watchUsers.map(([n]) => `<div class="ci-avatar watching" title="${esc(n)} — In corso" data-tooltip="${esc(n)}">${esc(n[0].toUpperCase())}</div>`)
-    ].join('');
+/* ═══════════════════════════════════════════
+   PANNELLO ADMIN
+═══════════════════════════════════════════ */
+.admin-panel-overlay {
+    position: fixed; inset: 0; z-index: 600;
+    background: rgba(8,12,24,.82);
+    backdrop-filter: blur(8px);
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px;
+    animation: overlayIn .2s ease;
 }
 
-// ============================================
-// FIREBASE — CATALOGO
-// ============================================
-onValue(catalogRef, snap => {
-    catalogData = snap.val() || {};
-    // Aggiorna item normali e sub-item
-    document.querySelectorAll('.catalog-item:not(.catalog-folder)').forEach(li => updateCatalogItemUI(li));
-    // Aggiorna cartelle (media dai sub-item)
-    document.querySelectorAll('.catalog-folder').forEach(folder => updateFolderUI(folder));
-});
-
-// ============================================
-// FIREBASE — CONSIGLIATI
-// ============================================
-onValue(suggestedRef, snap => {
-    const raw = snap.val();
-    allSuggested = raw ? Object.entries(raw).map(([id, val]) => ({ id, ...val })) : [];
-    renderSuggested(allSuggested);
-    if (window._apRenderSugg) window._apRenderSugg();
-});
-
-// ============================================
-// POPUP VOTANTI CONSIGLIATI
-// ============================================
-function openSuggVotersPopup(item) {
-    const ratings = item.ratings ? Object.entries(item.ratings) : [];
-    if (!ratings.length) return;
-
-    // Ordina per voto decrescente
-    ratings.sort((a, b) => b[1] - a[1]);
-
-    const overlay = document.getElementById('catalogPopupOverlay');
-    overlay.innerHTML = `
-        <div class="popup-box">
-            <div class="popup-handle"></div>
-            <div class="popup-title">${esc(item.title)}</div>
-            <div class="popup-subtitle">Voti ricevuti — ${ratings.length} vot${ratings.length === 1 ? 'o' : 'i'}</div>
-            <div class="voters-list">
-                ${ratings.map(([nick, score]) => `
-                    <div class="voter-row">
-                        <div class="voter-avatar">${esc(nick[0].toUpperCase())}</div>
-                        <span class="voter-nick">${esc(nick)}</span>
-                        <span class="voter-score">${suggStarsHtml(score, 11)}</span>
-                        <span class="voter-num">${score}/10</span>
-                    </div>`).join('')}
-            </div>
-            <div class="popup-actions" style="margin-top:16px">
-                <button class="btn-popup-cancel" id="votersClose" style="flex:1">Chiudi</button>
-            </div>
-        </div>`;
-
-    overlay.style.display = 'flex';
-    overlay.classList.remove('closing');
-    addSwipeToClose(overlay);
-    overlay.querySelector('#votersClose').addEventListener('click', closePopup);
-    overlay.addEventListener('click', e => { if (e.target === overlay) closePopup(); });
+.admin-panel {
+    background: linear-gradient(160deg, #1c2540 0%, #111827 100%);
+    border: 1px solid var(--border2);
+    border-radius: 20px;
+    width: 100%; max-width: 560px;
+    max-height: 85vh;
+    display: flex; flex-direction: column;
+    box-shadow: var(--shadow-popup);
+    animation: popupIn .28s cubic-bezier(.2,.8,.3,1);
+    overflow: hidden;
 }
 
-// ============================================
-// POPUP VOTO CONSIGLIATI
-// ============================================
-function openSuggVotePopup(id, title) {
-    const overlay = document.getElementById('catalogPopupOverlay');
-    const pts = '12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26';
-    let selectedScore = 0;
+.admin-panel-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 20px 22px 16px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+}
+.admin-panel-title {
+    font-family: var(--font-serif); font-size: 20px; font-weight: 400; color: var(--hi);
+}
+.admin-panel-close {
+    background: none; border: none; cursor: pointer;
+    color: var(--low); font-size: 18px; padding: 4px 8px;
+    transition: color .15s; border-radius: 6px;
+}
+.admin-panel-close:hover { color: #f87171; background: rgba(248,113,113,.1); }
 
-    overlay.innerHTML = `
-        <div class="popup-box">
-            <div class="popup-handle"></div>
-            <div class="popup-title">${esc(title)}</div>
-            <div class="popup-subtitle">Dai il tuo voto (1–10)</div>
-
-            <div class="popup-nick-row">
-                <div class="field" style="flex:1;gap:5px">
-                    <label style="font-size:12px">Nickname</label>
-                    <input type="text" id="svpNick" placeholder="Lorem Ipsum" value="${esc(getNickname())}" autocomplete="off" maxlength="20">
-                </div>
-            </div>
-
-            <div class="popup-stars-label">Il tuo voto <span style="font-size:10px;color:var(--low);font-weight:400;text-transform:none;letter-spacing:0">½ cliccando la metà sinistra</span></div>
-            <div class="popup-stars" id="svpStars">
-                ${Array.from({length:10}, (_, i) => {
-                    const val = i + 1;
-                    const uid = 'svp_' + Math.random().toString(36).slice(2,7);
-                    return '<button class="star-btn" data-val="' + val + '" title="' + val + '/10">'
-                        + '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">'
-                        + '<defs><clipPath id="' + uid + '"><rect x="0" y="0" width="12" height="24"/></clipPath></defs>'
-                        + '<polygon class="star-full" points="' + pts + '"/>'
-                        + '<polygon class="star-half" points="' + pts + '" clip-path="url(#' + uid + ')"/>'
-                        + '</svg></button>';
-                }).join('')}
-            </div>
-
-            <div class="popup-actions">
-                <button class="btn-popup-cancel" id="svpCancel">Annulla</button>
-                <button class="btn-popup-save" id="svpSave" disabled>Salva voto</button>
-            </div>
-        </div>`;
-
-    overlay.style.display = 'flex';
-    overlay.classList.remove('closing');
-    addSwipeToClose(overlay);
-
-    // Stelle
-    function applyStars(btns, val) {
-        btns.forEach(b => {
-            const v = parseFloat(b.dataset.val);
-            b.classList.remove('lit','half-lit');
-            if (val >= v)          b.classList.add('lit');
-            else if (val >= v-0.5) b.classList.add('half-lit');
-        });
-    }
-    const starBtns = Array.from(overlay.querySelectorAll('.star-btn'));
-    starBtns.forEach(btn => {
-        btn.addEventListener('click', e => {
-            const v = parseFloat(btn.dataset.val);
-            const half = (e.clientX - btn.getBoundingClientRect().left) < btn.getBoundingClientRect().width / 2;
-            selectedScore = half ? v - 0.5 : v;
-            applyStars(starBtns, selectedScore);
-            overlay.querySelector('#svpSave').disabled = false;
-        });
-        btn.addEventListener('mousemove', e => {
-            const v = parseFloat(btn.dataset.val);
-            const half = (e.clientX - btn.getBoundingClientRect().left) < btn.getBoundingClientRect().width / 2;
-            applyStars(starBtns, half ? v - 0.5 : v);
-        });
-        btn.addEventListener('mouseleave', () => applyStars(starBtns, selectedScore));
-    });
-
-    overlay.querySelector('#svpSave').addEventListener('click', async () => {
-        const nick = overlay.querySelector('#svpNick').value.trim();
-        if (!nick) { alert('Inserisci il tuo nickname.'); return; }
-        if (!selectedScore) { alert('Seleziona un voto.'); return; }
-        saveNickname(nick);
-        const saveBtn = overlay.querySelector('#svpSave');
-        saveBtn.disabled = true; saveBtn.textContent = 'Salvataggio…';
-        await voteSuggested(id, selectedScore);
-        closePopup();
-    });
-
-    overlay.querySelector('#svpCancel').addEventListener('click', closePopup);
-    overlay.addEventListener('click', e => { if (e.target === overlay) closePopup(); });
+/* Tab admin */
+.admin-tabs {
+    display: flex; gap: 4px; padding: 12px 16px 0;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0; overflow-x: auto;
+    scrollbar-width: none;
+}
+.admin-tabs::-webkit-scrollbar { display: none; }
+.admin-tab {
+    font-family: var(--font-sans); font-size: 12.5px; font-weight: 600;
+    padding: 7px 14px; border-radius: 8px 8px 0 0;
+    border: 1px solid transparent; border-bottom: none;
+    background: none; color: var(--low); cursor: pointer;
+    white-space: nowrap; transition: all .15s;
+}
+.admin-tab:hover { color: var(--mid); }
+.admin-tab.active {
+    background: var(--surface2); color: var(--hi);
+    border-color: var(--border);
 }
 
-// ============================================
-// CONSIGLIATI — VOTA (score 1-10)
-// ============================================
-async function voteSuggested(id, score) {
-    const myNick = getNickname();
-    if (!myNick) { alert('Imposta prima il tuo Nickname!'); return; }
-    const item = allSuggested.find(s => s.id === id);
-    if (!item) return;
-    if (item.nick === myNick) { alert('Non puoi votare un tuo consiglio!'); return; }
+/* Sezioni */
+.admin-section {
+    display: none; flex-direction: column;
+    flex: 1; overflow: hidden;
+    padding: 16px 20px;
+}
+.admin-section.active { display: flex; }
 
-    // Salva il voto sotto suggested/{id}/ratings/{nick}
-    try {
-        await set(ref(db, `suggested/${id}/ratings/${myNick}`), score);
-        saveSuggRating(id, score);
-    } catch (e) { alert('Errore: ' + e.message); }
+.admin-hint {
+    font-size: 12px; color: var(--low); margin-bottom: 12px; flex-shrink: 0;
 }
 
-// ============================================
-// CONSIGLIATI — MEDIA VOTI
-// ============================================
-function suggAvg(item) {
-    const ratings = item.ratings ? Object.values(item.ratings) : [];
-    if (!ratings.length) return null;
-    const avg = ratings.reduce((a, b) => a + b, 0) / ratings.length;
-    // arrotonda al mezzo punto più vicino per le stelle
-    const rounded = Math.round(avg * 2) / 2;
-    return { avg: Math.round(avg * 10) / 10, rounded, count: ratings.length };
+/* Form aggiungi titolo */
+.ap-add-form {
+    display: flex; gap: 8px; margin-bottom: 14px; flex-shrink: 0; flex-wrap: wrap;
+}
+.ap-add-form input { flex: 1; min-width: 150px; font-size: 14px; }
+.ap-add-form select { font-size: 13px; width: auto; flex-shrink: 0; }
+.ap-btn-add {
+    font-family: var(--font-sans); font-size: 13px; font-weight: 700;
+    padding: 8px 16px; border-radius: var(--r-input);
+    background: linear-gradient(135deg, var(--teal), #1f7a6e);
+    color: #fff; border: none; cursor: pointer; white-space: nowrap;
+    transition: opacity .15s;
+}
+.ap-btn-add:hover { opacity: .88; }
+
+/* Lista items */
+.ap-list {
+    flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 6px;
+    scrollbar-width: thin; scrollbar-color: var(--teal-dim2) transparent;
+    padding-right: 2px;
+}
+.ap-list::-webkit-scrollbar { width: 4px; }
+.ap-list::-webkit-scrollbar-thumb { background: var(--teal-dim2); border-radius: 4px; }
+
+.ap-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 12px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 10px; transition: border-color .15s;
+}
+.ap-item:hover { border-color: var(--border2); }
+
+.ap-item-info { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ap-item-title { font-size: 14px; font-weight: 600; color: var(--hi); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ap-item-meta  { font-size: 11.5px; color: var(--low); }
+.ap-item-notes { font-size: 11.5px; color: var(--mid); font-style: italic; }
+
+.ap-item-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.ap-btn {
+    font-family: var(--font-sans); font-size: 12px; font-weight: 700;
+    padding: 5px 12px; border-radius: var(--r-pill);
+    border: 1.5px solid var(--border2); background: var(--surface3);
+    color: var(--mid); cursor: pointer; transition: all .15s; white-space: nowrap;
+}
+.ap-btn-evade { color: var(--green); border-color: var(--green-brd); background: var(--green-dim); }
+.ap-btn-evade:hover { background: rgba(52,211,153,.22); }
+.ap-btn-del { color: #f87171; border-color: rgba(248,113,113,.3); background: rgba(248,113,113,.08); }
+.ap-btn-del:hover { background: rgba(248,113,113,.2); }
+
+.ap-empty { font-size: 13px; color: var(--low); text-align: center; padding: 24px; }
+
+@media (max-width: 440px) {
+    .admin-panel { max-height: 92vh; border-radius: 16px; }
+    .ap-add-form { flex-direction: column; }
+    .ap-add-form select, .ap-btn-add { width: 100%; }
 }
 
-// Genera 10 stelline SVG inline con supporto mezze stelle (step 0.5)
-function suggStarsHtml(score, size = 11) {
-    if (!score) return '';
-    const pts = '12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26';
-    let s = '';
-    for (let i = 1; i <= 10; i++) {
-        if (score >= i) {
-            // stella piena
-            s += `<svg width="${size}" height="${size}" viewBox="0 0 24 24"><polygon points="${pts}" fill="#fbbf24" stroke="#fbbf24" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
-        } else if (score >= i - 0.5) {
-            // mezza stella — clipPath
-            const uid = 'sg' + i + Math.random().toString(36).slice(2,5);
-            s += `<svg width="${size}" height="${size}" viewBox="0 0 24 24">`
-               + `<defs><clipPath id="${uid}"><rect x="0" y="0" width="12" height="24"/></clipPath></defs>`
-               + `<polygon points="${pts}" fill="none" stroke="#475569" stroke-width="1.5" stroke-linejoin="round"/>`
-               + `<polygon points="${pts}" fill="#fbbf24" stroke="#fbbf24" stroke-width="1.5" stroke-linejoin="round" clip-path="url(#${uid})"/>`
-               + `</svg>`;
-        } else {
-            // stella vuota
-            s += `<svg width="${size}" height="${size}" viewBox="0 0 24 24"><polygon points="${pts}" fill="none" stroke="#475569" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
-        }
-    }
-    return `<span style="display:inline-flex;align-items:center;gap:1px">${s}</span>`;
+
+
+/* Filtri categoria nel pannello admin */
+.ap-filter-bar {
+    display: flex; gap: 6px; margin-bottom: 10px; flex-shrink: 0;
+}
+.ap-filter-btn {
+    font-family: var(--font-sans); font-size: 12px; font-weight: 600;
+    padding: 5px 12px; border-radius: var(--r-pill);
+    border: 1.5px solid var(--border2); background: var(--surface3);
+    color: var(--mid); cursor: pointer; transition: all .15s;
+}
+.ap-filter-btn.active { background: var(--teal-dim); border-color: var(--teal-dim2); color: var(--teal-light); }
+.ap-filter-btn:hover:not(.active) { color: var(--hi); }
+
+/* Modifica totale nel pannello admin */
+.ap-total-edit {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px 12px;
+    margin-bottom: 12px; flex-shrink: 0;
 }
 
-// ============================================
-// CONSIGLIATI — RENDER
-// ============================================
-function renderSuggested(list) {
-    const el    = document.getElementById('suggestedList');
-    const badge = document.getElementById('suggestedCount');
-    if (!el) return;
-    badge.textContent = list.length;
-
-    if (!list.length) {
-        el.innerHTML = '<div class="sugg-empty">Nessun consiglio ancora.<br>Sii il primo!</div>';
-        return;
-    }
-
-    const myNick = getNickname();
-
-    // ── CLASSIFICA ──
-    if (currentSuggSort === 'rank') {
-        // Calcola media per ogni item, ordina: media desc → a parità timestamp asc
-        const withAvg = list.map(item => ({ ...item, _avg: suggAvg(item) }));
-        const sorted  = withAvg.sort((a, b) => {
-            const aAvg = a._avg ? a._avg.avg : -1;
-            const bAvg = b._avg ? b._avg.avg : -1;
-            return bAvg !== aAvg ? bAvg - aAvg : (a.timestamp || 0) - (b.timestamp || 0);
-        });
-        const medals     = ['🥇', '🥈', '🥉'];
-        const showMedals = sorted.length >= 1;  // medaglie sempre visibili
-
-        el.innerHTML = sorted.map((item, idx) => {
-            const rank     = idx + 1;
-            const isTop    = showMedals && rank <= 3;
-            const medal    = isTop ? medals[idx] : '';
-            const isOwn    = myNick && item.nick === myNick;
-            // Controlla sia localStorage che ratings Firebase (per chi ha votato al momento dell'inserimento)
-            const myScore  = getSuggRating(item.id) || (myNick && item.ratings && item.ratings[myNick]) || 0;
-            const voted    = myScore > 0;
-            // Se il voto è in Firebase ma non in localStorage, salvalo
-            if (myNick && item.ratings && item.ratings[myNick] && !getSuggRating(item.id)) {
-                saveSuggRating(item.id, item.ratings[myNick]);
-            }
-            const avgData  = item._avg;
-
-            return `
-                <div class="sugg-item ${isTop ? 'sugg-top sugg-top-' + rank : ''}">
-                    <div class="sugg-item-top">
-                        ${medal ? `<span class="sugg-medal">${medal}</span>` : `<span class="sugg-rank">${rank}</span>`}
-                        <div class="sugg-title-wrap">
-                            <span class="sugg-title">${esc(item.title)}</span>
-                            <span class="sugg-by">${esc(item.nick)}</span>
-                        </div>
-                        ${(isAdminMode || item.nick === myNick) ? `<button class="sugg-delete" data-id="${item.id}" title="Rimuovi">✕</button>` : ''}
-                    </div>
-                    <div class="sugg-item-bottom">
-                        <div class="sugg-avg-wrap">
-                            ${avgData
-                                ? `<span class="sugg-avg">${suggStarsHtml(avgData.rounded, 11)} <span class="sugg-avg-num">${avgData.avg.toFixed(1)}/10</span> <button class="sugg-votes-btn" data-id="${item.id}" title="Vedi chi ha votato">(${avgData.count} vot${avgData.count === 1 ? 'o' : 'i'})</button></span>`
-                                : `<span class="sugg-avg sugg-avg-none">nessun voto ancora</span>`}
-                        </div>
-                        <div class="sugg-score-wrap">
-                            ${isOwn && !voted
-                                ? `<span class="sugg-own-badge">tuo</span>`
-                                : voted
-                                    ? `<span class="sugg-voted-score"><span style="font-size:11px;color:var(--teal-light)">Voto: ${myScore}/10</span></span>`
-                                    : isOwn
-                                        ? `<span class="sugg-own-badge">tuo</span>`
-                                        : `<button class="btn-sugg-vote-open" data-id="${item.id}" data-title="${esc(item.title)}" data-nick="${esc(item.nick)}">Vota</button>`
-                            }
-                        </div>
-                    </div>
-                </div>`;
-        }).join('');
-
-    // ── A → Z ──
-    } else if (currentSuggSort === 'alpha') {
-        const sorted = [...list].sort((a, b) => a.title.localeCompare(b.title, 'it'));
-        el.innerHTML = sorted.map(item => `
-            <div class="sugg-item">
-                <div class="sugg-info">
-                    <span class="sugg-title">${esc(item.title)}</span>
-                    <span class="sugg-by">${esc(item.nick)}</span>
-                </div>
-                ${(isAdminMode || item.nick === myNick) ? `<button class="sugg-delete" data-id="${item.id}" title="Rimuovi">✕</button>` : ''}
-            </div>`).join('');
-
-    }
-
-    // Listener contatore voti — mostra chi ha votato
-    el.querySelectorAll('.sugg-votes-btn').forEach(btn => {
-        btn.addEventListener('click', e => {
-            e.stopPropagation();
-            const item = allSuggested.find(s => s.id === btn.dataset.id);
-            if (!item) return;
-            openSuggVotersPopup(item);
-        });
-    });
-
-    // Listener bottone Vota — apre popup stelline
-    el.querySelectorAll('.btn-sugg-vote-open').forEach(btn => {
-        btn.addEventListener('click', () => openSuggVotePopup(btn.dataset.id, btn.dataset.title));
-    });
-
-    // Listener stelline voto 1-10 con mezze stelle (non più usato in classifica ma mantenuto per compatibilità)
-    el.querySelectorAll('.sugg-stars-input').forEach(wrap => {
-        const id   = wrap.dataset.id;
-        const btns = Array.from(wrap.querySelectorAll('.ssb'));
-        const pts  = '12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26';
-
-        function renderPreview(hoverScore) {
-            btns.forEach((b, i) => {
-                const v = i + 1;
-                if (hoverScore >= v) {
-                    b.innerHTML = `<svg width="17" height="17" viewBox="0 0 24 24"><polygon points="${pts}" fill="#fbbf24" stroke="#fbbf24" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
-                } else if (hoverScore >= v - 0.5) {
-                    const uid = 'ph' + i;
-                    b.innerHTML = `<svg width="17" height="17" viewBox="0 0 24 24">`
-                        + `<defs><clipPath id="${uid}"><rect x="0" y="0" width="12" height="24"/></clipPath></defs>`
-                        + `<polygon points="${pts}" fill="none" stroke="#475569" stroke-width="1.5" stroke-linejoin="round"/>`
-                        + `<polygon points="${pts}" fill="#fbbf24" stroke="#fbbf24" stroke-width="1.5" stroke-linejoin="round" clip-path="url(#${uid})"/>`
-                        + `</svg>`;
-                } else {
-                    b.innerHTML = `<svg width="17" height="17" viewBox="0 0 24 24"><polygon points="${pts}" fill="none" stroke="#475569" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
-                }
-            });
-        }
-
-        function resetStars() {
-            btns.forEach(b => { b.innerHTML = '★'; b.style.color = '#475569'; });
-        }
-
-        // Inizializza stelle come testo (★) — più leggero
-        resetStars();
-
-        btns.forEach((btn, i) => {
-            btn.addEventListener('mousemove', e => {
-                const rect = btn.getBoundingClientRect();
-                const half = (e.clientX - rect.left) < rect.width / 2;
-                const score = half ? i + 0.5 : i + 1;
-                renderPreview(score);
-                btn.dataset.currentScore = score;
-            });
-            btn.addEventListener('mouseleave', () => {
-                resetStars();
-                delete btn.dataset.currentScore;
-            });
-            btn.addEventListener('click', e => {
-                const rect  = btn.getBoundingClientRect();
-                const half  = (e.clientX - rect.left) < rect.width / 2;
-                const score = half ? i + 0.5 : i + 1;
-                voteSuggested(id, score);
-            });
-        });
-
-        wrap.addEventListener('mouseleave', resetStars);
-    });
-    // Listener elimina
-    el.querySelectorAll('.sugg-delete').forEach(btn => {
-        btn.addEventListener('click', async () => {
-            if (!confirm('Rimuovere questo consiglio?')) return;
-            try { await remove(ref(db, 'suggested/' + btn.dataset.id)); }
-            catch (e) { alert('Errore: ' + e.message); }
-        });
-    });
+/* Episodi Serie TV */
+.cat-episodes {
+    font-size: 11px; font-weight: 600;
+    color: var(--mid); opacity: .7;
+    white-space: nowrap;
 }
 
-// ============================================
-// CONSIGLIATI — FORM SUBMIT
-// ============================================
-function initSuggFormStars() {
-    const wrap        = document.getElementById('suggFormStars');
-    const ratingInput = document.getElementById('suggFormRating');
-    if (!wrap) return;
+/* Griglia contatori nel pannello admin */
+.ap-counter-grid { display: flex; flex-direction: column; gap: 14px; overflow-y: auto; flex: 1; }
+.ap-counter-item {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px 14px;
+    display: flex; flex-direction: column; gap: 6px;
+}
+.ap-counter-item label { font-size: 12.5px; font-weight: 600; color: var(--hi); }
+.ap-counter-row { display: flex; gap: 6px; align-items: center; }
+.ap-counter-row input { width: 100px; font-size: 14px; }
+.ap-counter-save {
+    font-family: var(--font-sans); font-size: 12px; font-weight: 700;
+    padding: 6px 12px; border-radius: var(--r-pill);
+    background: var(--teal-dim); border: 1.5px solid var(--teal-dim2);
+    color: var(--teal-light); cursor: pointer; transition: background .15s; white-space: nowrap;
+}
+.ap-counter-save:hover { background: rgba(42,157,143,.28); }
+.ap-counter-reset, .ap-counter-clear {
+    font-family: var(--font-sans); font-size: 12px; font-weight: 600;
+    padding: 6px 12px; border-radius: var(--r-pill);
+    background: var(--surface3); border: 1.5px solid var(--border2);
+    color: var(--low); cursor: pointer; transition: all .15s; white-space: nowrap;
+}
+.ap-counter-reset:hover, .ap-counter-clear:hover { color: var(--hi); border-color: var(--border2); }
+.ap-counter-hint { font-size: 11px; color: var(--low); font-style: italic; }
 
-    const pts = '12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26';
-    let currentRating = 0;
-    let hoverRating   = 0;
+/* ═══════════════════════════════════════════
+   CARTELLE CATALOGO
+═══════════════════════════════════════════ */
+.catalog-folder { cursor: default; background: var(--surface2) !important; border-color: var(--border) !important; }
+.catalog-folder > .ci-main { cursor: pointer; }
 
-    // Crea i 10 bottoni stelle una volta sola
-    wrap.innerHTML = '';
-    const starBtns = Array.from({length: 10}, (_, i) => {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.dataset.idx = i;
-        btn.style.cssText = 'background:none;border:none;cursor:pointer;padding:1px;line-height:1';
-        wrap.appendChild(btn);
-        return btn;
-    });
-    const label = document.createElement('span');
-    label.style.cssText = 'font-size:13px;color:#cbd5e1;font-weight:600;margin-left:6px;display:none';
-    wrap.appendChild(label);
-    const clearBtn = document.createElement('button');
-    clearBtn.type = 'button';
-    clearBtn.textContent = '✕';
-    clearBtn.style.cssText = 'background:none;border:none;cursor:pointer;font-size:12px;color:#64748b;margin-left:4px;display:none';
-    wrap.appendChild(clearBtn);
+.ci-folder-icon { font-size: 13px; flex-shrink: 0; display: none; }
+.ci-folder-toggle {
+    font-size: 11px; color: var(--low);
+    margin-left: auto; flex-shrink: 0;
+    transition: transform .22s ease;
+    line-height: 1;
+}
+.catalog-folder.folder-open .ci-folder-toggle { transform: rotate(90deg); color: var(--mid); }
 
-    function starSVG(type) {
-        const uid = 'sfs_' + Math.random().toString(36).slice(2,7);
-        if (type === 'full')
-            return `<svg width="18" height="18" viewBox="0 0 24 24"><polygon points="${pts}" fill="#fbbf24" stroke="#fbbf24" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
-        if (type === 'half')
-            return `<svg width="18" height="18" viewBox="0 0 24 24"><defs><clipPath id="${uid}"><rect x="0" y="0" width="12" height="24"/></clipPath></defs><polygon points="${pts}" fill="none" stroke="#64748b" stroke-width="1.5" stroke-linejoin="round"/><polygon points="${pts}" fill="#fbbf24" stroke="#fbbf24" stroke-width="1.5" stroke-linejoin="round" clip-path="url(#${uid})"/></svg>`;
-        return `<svg width="18" height="18" viewBox="0 0 24 24"><polygon points="${pts}" fill="none" stroke="#64748b" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
-    }
+/* Lista sub-item: nascosta di default, SEMPRE */
+.ci-folder-list {
+    list-style: none;
+    max-height: 0; overflow: hidden;
+    transition: max-height .25s ease;
+    padding: 0 4px;
+}
+.catalog-folder.folder-open .ci-folder-list { max-height: none; overflow: visible; }
 
-    function refreshStars(active) {
-        starBtns.forEach((btn, i) => {
-            const v = i + 1;
-            if (active >= v)          btn.innerHTML = starSVG('full');
-            else if (active >= v-0.5) btn.innerHTML = starSVG('half');
-            else                      btn.innerHTML = starSVG('empty');
-        });
-        if (active > 0) {
-            label.textContent = active.toFixed(1) + '/10';
-            label.style.display = '';
-            clearBtn.style.display = '';
-        } else {
-            label.style.display = 'none';
-            clearBtn.style.display = 'none';
-        }
-    }
+/* Sub-item: indentati */
+.catalog-subitem {
+    margin: 3px 0;
+    padding-left: 4px !important;
+    border-left: 2px solid var(--teal-dim2) !important;
+    border-radius: 0 8px 8px 0 !important;
+    background: var(--surface2) !important;
+    border-color: var(--border) !important;
+}
+.catalog-subitem .ci-name { font-size: 12.5px; color: var(--mid); }
+.catalog-subitem:hover .ci-name { color: var(--hi); }
 
-    refreshStars(0);
-
-    starBtns.forEach((btn, i) => {
-        btn.addEventListener('mousemove', e => {
-            const rect = btn.getBoundingClientRect();
-            hoverRating = (e.clientX - rect.left) < rect.width / 2 ? i + 0.5 : i + 1;
-            refreshStars(hoverRating);
-        });
-        btn.addEventListener('mouseleave', () => {
-            hoverRating = 0;
-            refreshStars(currentRating);
-        });
-        btn.addEventListener('click', e => {
-            const rect = btn.getBoundingClientRect();
-            currentRating = (e.clientX - rect.left) < rect.width / 2 ? i + 0.5 : i + 1;
-            if (ratingInput) ratingInput.value = currentRating;
-            refreshStars(currentRating);
-        });
-    });
-
-    clearBtn.addEventListener('click', () => {
-        currentRating = 0;
-        if (ratingInput) ratingInput.value = 0;
-        refreshStars(0);
-    });
+/* Contatore cartelle — diverso dal count titoli */
+.cat-count-folders {
+    font-size: 11px; font-weight: 600;
+    background: var(--teal-dim); color: var(--teal-light);
+    padding: 2px 8px; border-radius: var(--r-pill);
+    border: 1px solid var(--teal-dim2);
 }
 
-document.getElementById('suggSubmit').addEventListener('click', async () => {
-    const titleEl  = document.getElementById('suggTitle');
-    const nickEl   = document.getElementById('suggNick');
-    const ratingEl = document.getElementById('suggFormRating');
-    const title    = titleEl.value.trim();
-    const nick     = nickEl.value.trim();
-    const rating   = parseFloat(ratingEl?.value || 0) || 0;
+/* Pannello admin — cartella evidenziata */
+.ap-item-folder { border-left: 3px solid var(--teal-dim2); }
+.ap-subitems {
+    display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px;
+}
+.ap-subitem-tag {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 11.5px; color: var(--mid);
+    background: var(--surface3); border: 1px solid var(--border);
+    padding: 2px 8px; border-radius: var(--r-pill);
+}
+.ap-subitem-del {
+    background: none; border: none; cursor: pointer;
+    color: var(--low); font-size: 12px; padding: 0;
+    line-height: 1; transition: color .15s;
+}
+.ap-subitem-del:hover { color: #f87171; }
 
-    // Validazione campi obbligatori
-    let suggError = '';
-    if (!title)  suggError = 'Inserisci il titolo del consiglio.';
-    else if (!nick)   suggError = 'Inserisci il tuo nickname.';
-    else if (!rating) suggError = 'Inserisci il tuo voto (1–10).';
-    if (suggError) {
-        showFormError('suggForm', suggError);
-        return;
-    }
-    saveNickname(nick);
-    const btn = document.getElementById('suggSubmit');
-    btn.disabled = true;
-    btn.querySelector('.btn-submit-text').textContent = 'Invio…';
-    try {
-        const payload = { title, nick, votes: 0, timestamp: Date.now() };
-        // Se ha messo un voto, lo aggiungiamo subito come suo rating
-        if (rating > 0) {
-            if (!payload.ratings) payload.ratings = {};
-            payload.ratings[nick] = rating;
-        }
-        await push(suggestedRef, payload);
-        titleEl.value = '';
-        // Reset stelle
-        if (ratingEl) ratingEl.value = 0;
-        initSuggFormStars();
-    } catch (e) { alert('Errore: ' + e.message); }
-    finally {
-        btn.disabled = false;
-        btn.querySelector('.btn-submit-text').textContent = 'Aggiungi consiglio';
-    }
-});
-
-// ============================================
-// CONSIGLIATI — TAB SORT
-// ============================================
-document.querySelectorAll('[data-sugg-sort]').forEach(tab => {
-    tab.addEventListener('click', function () {
-        document.querySelectorAll('[data-sugg-sort]').forEach(t => t.classList.remove('active'));
-        this.classList.add('active');
-        currentSuggSort = this.dataset.suggSort;
-        renderSuggested(allSuggested);
-    });
-});
-
-// ============================================
-// CATALOGO — ACCORDION + RICERCA + CLICK POPUP
-// ============================================
-function initCatalog() {
-    // Ora vuota — il catalogo è renderizzato da renderCatalogFromFirebase()
-    // Lasciata per compatibilità con eventuali chiamate residue
+/* Form sub-item nel pannello admin */
+.ap-add-sub-wrap {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px 12px;
+    margin-bottom: 10px; flex-shrink: 0;
 }
 
-// ============================================
-// CATALOGO — RENDER DA FIREBASE
-// ============================================
-function renderCatalogFromFirebase() {
-    const container = document.getElementById('catalogContainer');
-    if (!container) return;
+/* Episodi Film (stessa struttura serie TV) */
+#episodes-film { font-size: 11px; font-weight: 600; color: var(--mid); opacity: .7; }
 
-    const tv   = catalogStructure.serietv || [];
-    const film = catalogStructure.film    || [];
-
-    if (!tv.length && !film.length) {
-        container.innerHTML = '<div class="catalog-empty">Nessun titolo nel catalogo.<br>Aggiungili dal pannello admin → 🗂️ Catalogo.</div>';
-        return;
-    }
-
-    container.innerHTML = buildCategoryHTML('cat-serietv', 'Serie TV', 'dot-tv', 'count-serietv', 'folders-serietv', 'episodes-serietv', tv)
-                        + buildCategoryHTML('cat-film',    'Film',     'dot-film','count-film',    'folders-film',    'episodes-film',    film)
-                        + '<div id="catalogNoResults" class="catalog-empty" style="display:none">Nessun titolo trovato.</div>';
-
-    // Aggancia eventi
-    attachCatalogEvents();
-
-    // Aggiorna contatori
-    updateAllCategoryCounters();
+/* ═══════════════════════════════════════════
+   PANNELLO ADMIN — CATALOGO LAYOUT
+═══════════════════════════════════════════ */
+.ap-cat-layout {
+    display: flex;
+    gap: 14px;
 }
 
-function buildCategoryHTML(catId, catName, dotClass, countId, foldersId, episodesId, items) {
-    // Ordina items alfabeticamente per titolo (cartelle e singoli misti)
-    const sortedItems = [...items].sort((a, b) => a.title.localeCompare(b.title, 'it', {sensitivity:'base'}));
-    const listHTML = sortedItems.map(item => {
-        const safe    = esc(item.title);      // per attributi HTML
-        const display = item.title;            // testo visibile raw
-        if (item.type === 'folder') {
-            const subsHTML = (item.children || []).map(sub => {
-                const safeSub    = esc(sub);
-                const displaySub = sub;
-                return `<li class="catalog-item catalog-subitem" data-title="${safeSub}" data-parent="${safe}"><div class="ci-main"><span class="ci-name">${displaySub}</span></div></li>`;
-            }).join('');
-            return `<li class="catalog-item catalog-folder" data-title="${safe}" data-type="folder">
-                <div class="ci-main"><span class="ci-name">${display}</span><span class="ci-folder-toggle">▶</span></div>
-                <ul class="ci-folder-list">${subsHTML}</ul>
-            </li>`;
-        } else {
-            return `<li class="catalog-item" data-title="${safe}"><div class="ci-main"><span class="ci-name">${display}</span></div></li>`;
-        }
-    }).join('');
-
-    return `<div class="catalog-category">
-        <button class="catalog-cat-btn" data-target="${catId}" aria-expanded="false">
-            <span class="cat-left">
-                <span class="cat-dot ${dotClass}"></span>
-                <span class="cat-name">${catName}</span>
-                <span class="cat-count cat-count-folders" id="${foldersId}"></span>
-                <span class="cat-episodes" id="${episodesId}"></span>
-                <span style="display:none" id="${countId}">0</span>
-            </span>
-            <span class="cat-chevron"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-        </button>
-        <div class="catalog-panel" id="${catId}">
-            <ul class="catalog-list">${listHTML}</ul>
-        </div>
-    </div>`;
+/* Colonna sinistra — form compatta */
+.ap-cat-sidebar {
+    width: 155px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+}
+.ap-cat-sidebar input,
+.ap-cat-sidebar select {
+    font-size: 12.5px;
+    padding: 7px 9px;
+    width: 100%;
 }
 
-function attachCatalogEvents() {
-    // Accordion — gestito dalla delegazione sopra
+.ap-sidebar-title {
+    font-size: 9.5px; font-weight: 800;
+    letter-spacing: .1em; text-transform: uppercase;
+    color: var(--teal-light); margin-bottom: 8px;
+}
+.ap-btn-full { width: 100%; justify-content: center; }
+.ap-btn-secondary {
+    background: var(--surface3) !important;
+    border: 1.5px solid var(--border2) !important;
+    color: var(--mid) !important;
+    box-shadow: none !important;
+    font-size: 12px !important;
+}
+.ap-btn-secondary:hover { color: var(--hi) !important; }
+.ap-sidebar-divider { height: 1px; background: var(--border); margin: 12px 0; }
 
-    // Cartelle — tutte chiuse di default
-    document.querySelectorAll('.catalog-folder').forEach(folder => {
-        folder.classList.remove('folder-open');
-    });
+/* Colonna destra — lista più spazio */
+.ap-cat-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+.ap-cat-list-tall {
+    max-height: 360px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--teal-dim2) transparent;
+}
+.ap-cat-list-tall::-webkit-scrollbar { width: 4px; }
+.ap-cat-list-tall::-webkit-scrollbar-thumb { background: var(--teal-dim2); border-radius: 4px; }
 
-    // Delegazione eventi sul container — funziona anche durante la ricerca
-    const catalogContainer = document.getElementById('catalogContainer');
-    if (catalogContainer) {
-        // Rimuovi vecchi listener clonando
-        const newContainer = catalogContainer.cloneNode(true);
-        catalogContainer.parentNode.replaceChild(newContainer, catalogContainer);
+/* Items catalogo — più compatti */
+.ap-item { padding: 8px 10px; }
+.ap-item-title { font-size: 13px; }
+.ap-item-meta  { font-size: 11px; }
+.ap-subitems   { margin-top: 4px; }
 
-        newContainer.addEventListener('click', e => {
-            // Toggle ▶ espandi/chiudi
-            const toggle = e.target.closest('.ci-folder-toggle');
-            if (toggle) {
-                e.stopPropagation();
-                const folder = toggle.closest('.catalog-folder');
-                if (folder) {
-                    folder.classList.toggle('folder-open');
-                    updateFolderUI(folder);
-                }
-                return;
-            }
-
-            // Click sul nome cartella → popup
-            const nameSpan = e.target.closest('.catalog-folder > .ci-main .ci-name');
-            if (nameSpan) {
-                e.stopPropagation();
-                const folder = nameSpan.closest('.catalog-folder');
-                if (folder) openFolderPopup(folder);
-                return;
-            }
-
-            // Click su sub-item
-            const subitem = e.target.closest('.catalog-subitem');
-            if (subitem) {
-                e.stopPropagation();
-                openCatalogPopup(subitem.dataset.title, subitem.dataset.parent || null);
-                return;
-            }
-
-            // Click su item singolo
-            const single = e.target.closest('.catalog-item:not(.catalog-folder):not(.catalog-subitem)');
-            if (single) {
-                openCatalogPopup(single.dataset.title);
-            }
-        });
-
-        // Ri-aggancia accordion categorie sul nuovo container
-        newContainer.querySelectorAll('.catalog-cat-btn').forEach(btn => {
-            btn.setAttribute('aria-expanded', 'false');
-            btn.addEventListener('click', function() {
-                const id    = this.dataset.target;
-                const panel = document.getElementById(id);
-                const open  = panel?.classList.contains('open');
-                newContainer.querySelectorAll('.catalog-panel').forEach(p => p.classList.remove('open'));
-                newContainer.querySelectorAll('.catalog-cat-btn').forEach(b => b.setAttribute('aria-expanded','false'));
-                if (!open && panel) { panel.classList.add('open'); this.setAttribute('aria-expanded','true'); }
-            });
-        });
-    }
-
-    // Click su item e sub-item — gestiti dalla delegazione sopra
-
-    // Salva plainName per ricerca
-    document.querySelectorAll('.catalog-item').forEach(li => {
-        li.dataset.plainName = li.querySelector('.ci-name')?.textContent || '';
-    });
-
-    // Ricerca
-    const searchInput = document.getElementById('catalogSearch');
-    const noResults   = document.getElementById('catalogNoResults');
-    if (searchInput) {
-        // Rimuovi vecchi listener clonando
-        const newSearch = searchInput.cloneNode(true);
-        searchInput.parentNode.replaceChild(newSearch, searchInput);
-        newSearch.addEventListener('input', function() {
-            const q = this.value.trim().toLowerCase();
-            if (!q) {
-                document.querySelectorAll('.catalog-item').forEach(li => {
-                    li.classList.remove('hidden');
-                    li.querySelector('.ci-name').innerHTML = esc(li.dataset.plainName);
-                });
-                document.querySelectorAll('.catalog-panel').forEach(p => p.classList.remove('open'));
-                document.querySelectorAll('.catalog-cat-btn').forEach(b => b.setAttribute('aria-expanded','false'));
-                if (noResults) noResults.style.display = 'none';
-                return;
-            }
-            let anyVisible = false;
-            document.querySelectorAll('.catalog-category').forEach(cat => {
-                const panel  = cat.querySelector('.catalog-panel');
-                const catBtn = cat.querySelector('.catalog-cat-btn');
-                let catHasMatch = false;
-                cat.querySelectorAll('.catalog-item').forEach(li => {
-                    const plain = li.dataset.plainName || '';
-                    const match = plain.toLowerCase().includes(q);
-                    li.classList.toggle('hidden', !match);
-                    const nameEl = li.querySelector('.ci-name');
-                    if (!nameEl) return;
-                    if (match) {
-                        catHasMatch = true; anyVisible = true;
-                        const idx2 = plain.toLowerCase().indexOf(q);
-                        nameEl.innerHTML =
-                            esc(plain.slice(0,idx2)) + '<mark>' + esc(plain.slice(idx2, idx2+q.length)) + '</mark>' + esc(plain.slice(idx2+q.length));
-                        // Se è un sub-item, apri la cartella padre
-                        if (li.classList.contains('catalog-subitem')) {
-                            const folder = li.closest('.catalog-folder');
-                            if (folder) folder.classList.add('folder-open');
-                        }
-                    } else {
-                        nameEl.innerHTML = esc(plain);
-                    }
-                });
-                // Apri anche le cartelle che hanno sub-item visibili
-                cat.querySelectorAll('.catalog-folder').forEach(folder => {
-                    const hasVisible = Array.from(folder.querySelectorAll('.catalog-subitem'))
-                        .some(s => !s.classList.contains('hidden'));
-                    if (hasVisible) {
-                        folder.classList.add('folder-open');
-                        folder.classList.remove('hidden');
-                        catHasMatch = true; anyVisible = true;
-                    }
-                });
-                panel.classList.toggle('open', catHasMatch);
-                catBtn.setAttribute('aria-expanded', catHasMatch ? 'true' : 'false');
-            });
-            if (noResults) noResults.style.display = anyVisible ? 'none' : 'block';
-        });
-    }
-
-    // Aggiorna voti/stati dal catalogData Firebase
-    document.querySelectorAll('.catalog-item:not(.catalog-folder)').forEach(li => updateCatalogItemUI(li));
-    document.querySelectorAll('.catalog-folder').forEach(folder => updateFolderUI(folder));
-
-    // Tap su avatar → mostra nome completo (tooltip mobile)
-    initAvatarTooltips(document.getElementById('catalogContainer'));
+@media (max-width: 480px) {
+    .ap-cat-layout { flex-direction: column; }
+    .ap-cat-sidebar { width: 100%; }
+    .ap-cat-list-tall { max-height: 220px; }
 }
 
-function initAvatarTooltips(container) {
-    if (!container) return;
-    container.addEventListener('click', e => {
-        const avatar = e.target.closest('.ci-avatar');
-        if (!avatar) {
-            document.querySelectorAll('.ci-avatar.tooltip-visible').forEach(a => a.classList.remove('tooltip-visible'));
-            return;
-        }
-        e.stopPropagation();
-        const isVisible = avatar.classList.contains('tooltip-visible');
-        document.querySelectorAll('.ci-avatar.tooltip-visible').forEach(a => a.classList.remove('tooltip-visible'));
-        if (!isVisible) {
-            avatar.classList.add('tooltip-visible');
-            // Controlla se il tooltip esce dallo schermo a destra
-            const rect = avatar.getBoundingClientRect();
-            const tooltipEstimatedWidth = 80;
-            if (rect.left + tooltipEstimatedWidth > window.innerWidth - 8) {
-                avatar.style.setProperty('--tooltip-left', 'auto');
-                avatar.classList.add('tooltip-right-align');
-            } else {
-                avatar.classList.remove('tooltip-right-align');
-            }
-        }
-    });
+/* Search bar nel pannello admin catalogo */
+.ap-cat-search-wrap {
+    margin-bottom: 8px;
+}
+.ap-cat-search-wrap input {
+    width: 100%;
+    font-size: 13px;
+    padding: 8px 11px;
+    background: var(--surface2);
+    border: 1.5px solid var(--border);
+    border-radius: var(--r-input);
+    color: var(--hi);
+    outline: none;
+    transition: border-color .18s;
+    font-family: var(--font-sans);
+}
+.ap-cat-search-wrap input:focus { border-color: var(--teal); }
+.ap-cat-search-wrap input::placeholder { color: var(--low); }
+
+/* Counter cartelle — più compatto */
+.cat-count-folders {
+    font-size: 10.5px !important;
+    padding: 2px 7px !important;
 }
 
-function updateAllCategoryCounters() {
-    ['serietv','film'].forEach(key => {
-        const panel     = document.getElementById('cat-' + key);
-        const countEl   = document.getElementById('count-' + key);
-        const foldersEl = document.getElementById('folders-' + key);
-        if (!panel) return;
-        if (countEl) {
-            const singles  = panel.querySelectorAll('.catalog-item:not(.catalog-folder):not(.catalog-subitem)').length;
-            const subitems = panel.querySelectorAll('.catalog-subitem').length;
-            countEl.textContent = singles + subitems;
-        }
-        if (foldersEl) {
-            const n = panel.querySelectorAll('.catalog-folder').length;
-            if (n > 0) foldersEl.textContent = n + ' cart.';
-        }
-    });
+/* Fix cat-left per evitare wrap brutto su mobile */
+.cat-left { flex-wrap: wrap; row-gap: 3px; }
+
+/* ═══════════════════════════════════════════
+   TAB BAR CATALOGO (Catalogo / Watchlist)
+═══════════════════════════════════════════ */
+.catalog-tab-bar {
+    display: flex; gap: 4px;
+    background: var(--surface2);
+    border-radius: var(--r-pill);
+    padding: 3px;
+    margin-bottom: 16px;
+    border: 1px solid var(--border);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+}
+.catalog-tab-bar::-webkit-scrollbar { display: none; }
+.catalog-tab {
+    flex: 1; padding: 8px 10px;
+    font-family: var(--font-sans); font-size: 13px; font-weight: 500;
+    color: var(--low); background: none; border: none;
+    border-radius: calc(var(--r-pill) - 3px); cursor: pointer;
+    transition: background .18s, color .18s;
+    white-space: nowrap;
+    min-width: fit-content;
+}
+.catalog-tab:hover { color: var(--mid); }
+.catalog-tab.active {
+    background: var(--surface3); color: var(--hi);
+    font-weight: 700; box-shadow: 0 2px 8px rgba(0,0,0,.25);
 }
 
-// ============================================
-// FIREBASE — STRUTTURA CATALOGO
-// ============================================
-// Firebase salva gli array come oggetti {0:{...},1:{...}} — convertiamo
-function fbToArray(val) {
-    if (!val) return [];
-    if (Array.isArray(val)) return val;
-    return Object.values(val).map(item => {
-        if (item && item.children && !Array.isArray(item.children)) {
-            item.children = Object.values(item.children);
-        }
-        return item;
-    });
+/* ═══════════════════════════════════════════
+   WATCHLIST
+═══════════════════════════════════════════ */
+.watchlist-nick-bar {
+    display: flex; gap: 8px; margin-bottom: 16px;
+}
+.watchlist-nick-bar input { flex: 1; font-size: 14px; }
+
+.btn-watchlist-nick {
+    font-family: var(--font-sans); font-size: 13px; font-weight: 700;
+    padding: 10px 16px; border-radius: var(--r-pill);
+    background: var(--teal-dim); border: 1.5px solid var(--teal-dim2);
+    color: var(--teal-light); cursor: pointer; white-space: nowrap;
+    transition: background .15s;
+}
+.btn-watchlist-nick:hover { background: rgba(42,157,143,.28); }
+
+.watchlist-content { min-height: 60px; }
+
+.watchlist-list { list-style: none; display: flex; flex-direction: column; gap: 6px; }
+
+.watchlist-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 14px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 10px; gap: 10px;
+    animation: fadeSlideIn .2s ease;
+    transition: border-color .15s;
+}
+.watchlist-item:hover { border-color: var(--teal-dim2); }
+
+.watchlist-title {
+    font-size: 14px; font-weight: 600; color: var(--hi);
+    flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.watchlist-remove {
+    background: none; border: none; cursor: pointer;
+    font-size: 18px; color: #f87171;
+    transition: transform .15s, opacity .15s;
+    flex-shrink: 0; padding: 2px;
+}
+.watchlist-remove:hover { transform: scale(1.2); opacity: .8; }
+
+/* Cuore nel popup */
+.btn-watchlist-toggle {
+    width: 100%; margin-top: 12px;
+    padding: 12px;
+    font-family: var(--font-sans); font-size: 14px; font-weight: 600;
+    border-radius: var(--r-input);
+    border: 1.5px solid var(--border2);
+    background: var(--surface2); color: var(--mid);
+    cursor: pointer; transition: all .18s;
+}
+.btn-watchlist-toggle:hover {
+    border-color: #f87171;
+    color: #f87171;
+    background: rgba(248,113,113,.08);
+}
+.btn-watchlist-toggle-active {
+    background: rgba(248,113,113,.12) !important;
+    border-color: rgba(248,113,113,.4) !important;
+    color: #f87171 !important;
 }
 
-onValue(catalogStructRef, snap => {
-    const data = snap.val();
-    if (data) {
-        catalogStructure.serietv = fbToArray(data.serietv);
-        catalogStructure.film    = fbToArray(data.film);
-                }
-    renderCatalogFromFirebase();
-    // Ricarica counters Firebase dopo render
-    const countersSnap = get(ref(db, 'counters'));
-    countersSnap.then(s => {
-        if (!s.exists()) return;
-        const d = s.val();
-        const suffixes2 = {
-            'folders-serietv':  ' cart.',
-            'episodes-serietv': ' ep.',
-            'folders-film':     ' cart.',
-            'episodes-film':    ' titoli'
-        };
-        const map = { 'folders-serietv':'folders-serietv','episodes-serietv':'episodes-serietv','folders-film':'folders-film','episodes-film':'episodes-film' };
-        Object.entries(map).forEach(([k,elId]) => {
-            const el = document.getElementById(elId);
-            if (el && d[k]) {
-                const num = String(d[k]).replace(/[^0-9]/g, '');
-                el.textContent = num + (suffixes2[k] || '');
-            }
-        });
-    });
-});
+/* Bottone rimuovi watchlist — testo + cuore */
+.watchlist-remove {
+    display: flex; align-items: center; gap: 5px;
+    font-family: var(--font-sans); font-size: 12px; font-weight: 600;
+    padding: 6px 11px; border-radius: var(--r-pill);
+    border: 1.5px solid rgba(248,113,113,.3);
+    background: rgba(248,113,113,.08); color: #f87171;
+    cursor: pointer; white-space: nowrap; flex-shrink: 0;
+    transition: all .15s;
+}
+.watchlist-remove:hover { background: rgba(248,113,113,.2); border-color: rgba(248,113,113,.5); transform: none; }
+.wl-remove-icon { font-size: 14px; }
+.wl-remove-label { font-size: 12px; }
 
-// ============================================
-// PANNELLO ADMIN
-// ============================================
-function openAdminPanel() {
-    const existing = document.getElementById('adminPanelOverlay');
-    if (existing) { existing.remove(); return; }
 
-    // Raccogli titoli catalogo dal DOM
-    const catalogItems = Array.from(document.querySelectorAll('.catalog-item')).map(li => ({
-        title: li.dataset.title,
-        category: li.closest('.catalog-category')?.querySelector('.cat-name')?.textContent || ''
-    }));
-
-    const overlay = document.createElement('div');
-    overlay.id = 'adminPanelOverlay';
-    overlay.className = 'admin-panel-overlay';
-    overlay.innerHTML = `
-        <div class="admin-panel">
-            <div class="admin-panel-header">
-                <h2 class="admin-panel-title">🔓 Pannello Admin</h2>
-                <button class="admin-panel-close" id="adminPanelClose">✕</button>
-            </div>
-
-            <div class="admin-tabs">
-                <button class="admin-tab active" data-panel="richieste">📋 Richieste</button>
-                <button class="admin-tab" data-panel="evase">✅ Evase</button>
-                <button class="admin-tab" data-panel="consigliati">💡 Consigliati</button>
-                <button class="admin-tab" data-panel="catalogo">🗂️ Catalogo</button>
-                <button class="admin-tab" data-panel="contatori">🔢 Contatori</button>
-                <button class="admin-tab" data-panel="novita">Aggiunti di recente</button>
-            </div>
-
-            <!-- RICHIESTE -->
-            <div class="admin-section active" id="ap-richieste">
-                <p class="admin-hint">Puoi evadere o eliminare ogni richiesta.</p>
-                <div id="ap-req-list" class="ap-list"></div>
-            </div>
-
-            <!-- EVASE -->
-            <div class="admin-section" id="ap-evase">
-                <p class="admin-hint">Richieste già evase — puoi eliminarle.</p>
-                <div id="ap-ev-list" class="ap-list"></div>
-            </div>
-
-            <!-- CONSIGLIATI -->
-            <div class="admin-section" id="ap-consigliati">
-                <p class="admin-hint">Puoi eliminare qualsiasi consiglio.</p>
-                <div id="ap-sugg-list" class="ap-list"></div>
-            </div>
-
-            <!-- NOVITÀ -->
-            <div class="admin-section" id="ap-novita">
-                <p class="admin-hint">Ultimi titoli aggiunti — max 10 visibili. Ordine: dal più recente.</p>
-                <div class="ap-add-form" style="flex-direction:column;gap:8px">
-                    <input type="text" id="apRecentTitle" placeholder="Es: La Casa di Carta" autocomplete="off">
-                    <select id="apRecentType">
-                        <option value="serie-completa">Serie TV completa</option>
-                        <option value="serie-stagione">Stagione singola</option>
-                        <option value="film-cartella">Raccolta Film</option>
-                        <option value="film-singolo">Film singolo</option>
-                    </select>
-                    <button id="apAddRecent" class="ap-btn-add">+ Aggiungi</button>
-                </div>
-                <div id="ap-recent-list" class="ap-list" style="margin-top:12px"></div>
-            </div>
-
-            <!-- CONTATORI -->
-            <div class="admin-section" id="ap-contatori">
-                <p class="admin-hint">I valori vengono salvati su Firebase e persistono al reload.</p>
-                <div class="ap-counter-grid">
-                    <div class="ap-counter-item">
-                        <label>📺 Serie TV — cartelle</label>
-                        <div class="ap-counter-row">
-                            <input type="text" id="apFoldersTV" placeholder="Es: 122 cart.">
-                            <button class="ap-counter-save" data-key="folders-serietv" data-target="folders-serietv" data-input="apFoldersTV">Salva</button>
-                        </div>
-                    </div>
-                    <div class="ap-counter-item">
-                        <label>📺 Serie TV — episodi</label>
-                        <div class="ap-counter-row">
-                            <input type="text" id="apEpisodesTV" placeholder="Es: 3400 ep.">
-                            <button class="ap-counter-save" data-key="episodes-serietv" data-target="episodes-serietv" data-input="apEpisodesTV">Salva</button>
-                        </div>
-                    </div>
-                    <div class="ap-counter-item">
-                        <label>🎬 Film — cartelle</label>
-                        <div class="ap-counter-row">
-                            <input type="text" id="apFoldersFilm" placeholder="Es: 42 cart.">
-                            <button class="ap-counter-save" data-key="folders-film" data-target="folders-film" data-input="apFoldersFilm">Salva</button>
-                        </div>
-                    </div>
-                    <div class="ap-counter-item">
-                        <label>🎬 Film — totale</label>
-                        <div class="ap-counter-row">
-                            <input type="text" id="apEpisodesFilm" placeholder="Es: 345 tot.">
-                            <button class="ap-counter-save" data-key="episodes-film" data-target="episodes-film" data-input="apEpisodesFilm">Salva</button>
-                        </div>
-                    </div>
-
-                </div>
-            </div>
-
-            <!-- CATALOGO -->
-            <div class="admin-section" id="ap-catalogo">
-                <div class="ap-cat-layout">
-
-                    <!-- Colonna sinistra: form aggiungi -->
-                    <div class="ap-cat-sidebar">
-                        <div class="ap-sidebar-title">Nuovo titolo</div>
-                        <input type="text" id="apNewTitle" placeholder="Titolo…" autocomplete="off" style="margin-bottom:6px">
-                        <select id="apNewCat" style="margin-bottom:6px">
-                            <option value="cat-serietv">📺 Serie TV</option>
-                            <option value="cat-film">🎬 Film</option>
-                        </select>
-                        <select id="apNewType" style="margin-bottom:8px">
-                            <option value="single">Titolo singolo</option>
-                            <option value="folder">📁 Cartella</option>
-                        </select>
-                        <button id="apAddTitle" class="ap-btn-add ap-btn-full">+ Aggiungi</button>
-
-                        <div class="ap-sidebar-divider"></div>
-
-                        <div class="ap-sidebar-title">Sotto-titolo</div>
-                        <select id="apSubFolder" style="margin-bottom:6px"></select>
-                        <input type="text" id="apSubTitle" placeholder="Es: Stagione 2" autocomplete="off" style="margin-bottom:8px">
-                        <button id="apAddSub" class="ap-btn-add ap-btn-full ap-btn-secondary">+ Aggiungi</button>
-                    </div>
-
-                    <!-- Colonna destra: lista + filtri -->
-                    <div class="ap-cat-main">
-                        <div class="ap-filter-bar">
-                            <button class="ap-filter-btn active" data-filter="">Tutti</button>
-                            <button class="ap-filter-btn" data-filter="cat-serietv">Serie TV</button>
-                            <button class="ap-filter-btn" data-filter="cat-film">Film</button>
-                        </div>
-                        <div class="ap-cat-search-wrap">
-                            <input type="search" id="apCatSearch" placeholder="Cerca titolo…" autocomplete="off">
-                        </div>
-                        <div id="ap-cat-list" class="ap-list ap-cat-list-tall"></div>
-                    </div>
-                </div>
-            </div>
-        </div>`;
-
-    document.body.appendChild(overlay);
-
-    // Chiudi
-    overlay.querySelector('#adminPanelClose').addEventListener('click', () => overlay.remove());
-    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
-
-    // Tab switching
-    overlay.querySelectorAll('.admin-tab').forEach(tab => {
-        tab.addEventListener('click', function() {
-            overlay.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
-            overlay.querySelectorAll('.admin-section').forEach(s => s.classList.remove('active'));
-            this.classList.add('active');
-            overlay.querySelector('#ap-' + this.dataset.panel).classList.add('active');
-        });
-    });
-
-    // ── Popola RICHIESTE ──
-    function renderApRequests() {
-        const el = overlay.querySelector('#ap-req-list');
-        if (!allRequests.length) { el.innerHTML = '<div class="ap-empty">Nessuna richiesta.</div>'; return; }
-        const sorted = [...allRequests].sort((a, b) => b.timestamp - a.timestamp);
-        el.innerHTML = sorted.map(req => `
-            <div class="ap-item">
-                <div class="ap-item-info">
-                    <span class="ap-item-title">${esc(req.title)}</span>
-                    <span class="ap-item-meta">${esc(req.type)} · ${esc(req.requester)} · ${esc(req.date)}</span>
-                    ${req.notes ? `<span class="ap-item-notes">${esc(req.notes)}</span>` : ''}
-                </div>
-                <div class="ap-item-actions">
-                    <button class="ap-btn ap-btn-evade" data-id="${req.id}" data-title="${esc(req.title)}">Evadi</button>
-                    <button class="ap-btn ap-btn-del" data-id="${req.id}" data-title="${esc(req.title)}" data-type="request">✕</button>
-                </div>
-            </div>`).join('');
-        el.querySelectorAll('.ap-btn-evade').forEach(btn => {
-            btn.addEventListener('click', async () => {
-                if (!confirm(`Evadere "${btn.dataset.title}"?`)) return;
-                await evade(btn.dataset.id, btn.dataset.title);
-                renderApRequests();
-                renderApEvased();
-            });
-        });
-        el.querySelectorAll('.ap-btn-del[data-type="request"]').forEach(btn => {
-            btn.addEventListener('click', async () => {
-                if (!confirm(`Eliminare definitivamente "${btn.dataset.title}"?`)) return;
-                try { await remove(ref(db, 'requests/' + btn.dataset.id)); renderApRequests(); }
-                catch(e) { alert('Errore: ' + e.message); }
-            });
-        });
-    }
-
-    // ── Popola EVASE ──
-    function renderApEvased() {
-        const el = overlay.querySelector('#ap-ev-list');
-        if (!allEvased.length) { el.innerHTML = '<div class="ap-empty">Nessuna richiesta evasa.</div>'; return; }
-        const sorted = [...allEvased].sort((a, b) => b.evadedTimestamp - a.evadedTimestamp);
-        el.innerHTML = sorted.map(req => `
-            <div class="ap-item">
-                <div class="ap-item-info">
-                    <span class="ap-item-title">${esc(req.title)}</span>
-                    <span class="ap-item-meta">${esc(req.type)} · ${esc(req.requester)} · Evasa: ${esc(req.evadedAt)}</span>
-                </div>
-                <div class="ap-item-actions">
-                    <button class="ap-btn ap-btn-del" data-id="${req.id}" data-title="${esc(req.title)}">✕</button>
-                </div>
-            </div>`).join('');
-        el.querySelectorAll('.ap-btn-del').forEach(btn => {
-            btn.addEventListener('click', async () => {
-                if (!confirm(`Eliminare "${btn.dataset.title}" dalle evase?`)) return;
-                try { await remove(ref(db, 'evased/' + btn.dataset.id)); renderApEvased(); }
-                catch(e) { alert('Errore: ' + e.message); }
-            });
-        });
-    }
-
-    // ── Popola CONSIGLIATI ──
-    function renderApSugg() {
-        const el = overlay.querySelector('#ap-sugg-list');
-        if (!allSuggested.length) { el.innerHTML = '<div class="ap-empty">Nessun consiglio.</div>'; return; }
-        const sorted = [...allSuggested].sort((a, b) => a.title.localeCompare(b.title, 'it'));
-        el.innerHTML = sorted.map(s => `
-            <div class="ap-item">
-                <div class="ap-item-info">
-                    <span class="ap-item-title">${esc(s.title)}</span>
-                    <span class="ap-item-meta">di ${esc(s.nick)}</span>
-                </div>
-                <div class="ap-item-actions">
-                    <button class="ap-btn ap-btn-del" data-id="${s.id}" data-title="${esc(s.title)}">✕</button>
-                </div>
-            </div>`).join('');
-        el.querySelectorAll('.ap-btn-del').forEach(btn => {
-            btn.addEventListener('click', async () => {
-                if (!confirm(`Eliminare il consiglio "${btn.dataset.title}"?`)) return;
-                try { await remove(ref(db, 'suggested/' + btn.dataset.id)); renderApSugg(); }
-                catch(e) { alert('Errore: ' + e.message); }
-            });
-        });
-    }
-
-    // ── Popola CATALOGO (da catalogStructure Firebase) ──
-    function getFilteredItems(filterCat, searchQ) {
-        let items = [];
-        if (!filterCat || filterCat === 'cat-serietv') {
-            (catalogStructure.serietv || []).forEach(i => items.push({...i, _cat:'serietv', _catLabel:'Serie TV'}));
-        }
-        if (!filterCat || filterCat === 'cat-film') {
-            (catalogStructure.film || []).forEach(i => items.push({...i, _cat:'film', _catLabel:'Film'}));
-        }
-        if (searchQ) {
-            const q = searchQ.toLowerCase();
-            items = items.filter(i =>
-                i.title.toLowerCase().includes(q) ||
-                (i.children || []).some(s => s.toLowerCase().includes(q))
-            );
-        }
-        return items.sort((a,b) => a.title.localeCompare(b.title,'it'));
-    }
-
-    async function saveStructureToFirebase() {
-        try {
-            await set(ref(db, 'catalogStructure'), catalogStructure);
-        } catch(e) { alert('Errore salvataggio Firebase: ' + e.message); }
-    }
-
-    function renderApCatalog(filterCat = '', searchQ = '') {
-        const el = overlay.querySelector('#ap-cat-list');
-        const items = getFilteredItems(filterCat, searchQ);
-        if (!items.length) { el.innerHTML = '<div class="ap-empty">Nessun risultato.</div>'; return; }
-
-        el.innerHTML = items.map(item => {
-            const isFolder = item.type === 'folder';
-            const subs     = item.children || [];
-            return `<div class="ap-item ${isFolder ? 'ap-item-folder' : ''}">
-                <div class="ap-item-info">
-                    <span class="ap-item-title">${isFolder ? '📁 ' : ''}${esc(item.title)}</span>
-                    <span class="ap-item-meta">${item._catLabel}${isFolder ? ' · ' + subs.length + ' titoli interni' : ''}</span>
-                    ${isFolder && subs.length ? '<div class="ap-subitems">' + subs.map(s =>
-                        `<span class="ap-subitem-tag">${esc(s)}<button class="ap-subitem-del" data-title="${esc(s)}" data-parent="${esc(item.title)}" data-cat="${item._cat}">&times;</button></span>`
-                    ).join('') + '</div>' : ''}
-                </div>
-                <div class="ap-item-actions">
-                    <button class="ap-btn ap-btn-del" data-title="${esc(item.title)}" data-cat="${item._cat}" data-folder="${isFolder}">&times;</button>
-                </div>
-            </div>`;
-        }).join('');
-
-        // Elimina titolo o cartella
-        el.querySelectorAll('.ap-btn-del').forEach(btn => {
-            btn.addEventListener('click', async () => {
-                const title    = btn.dataset.title;
-                const cat      = btn.dataset.cat;
-                const isFolder = btn.dataset.folder === 'true';
-                if (!confirm(`Rimuovere "${title}"?`)) return;
-                catalogStructure[cat] = catalogStructure[cat].filter(i => i.title !== title);
-                await saveStructureToFirebase();
-                renderApCatalog(overlay.querySelector('.ap-filter-btn.active')?.dataset.filter || '', overlay.querySelector('#apCatSearch')?.value || '');
-            });
-        });
-
-        // Elimina sub-item
-        el.querySelectorAll('.ap-subitem-del').forEach(btn => {
-            btn.addEventListener('click', async e => {
-                e.stopPropagation();
-                const sub    = btn.dataset.title;
-                const parent = btn.dataset.parent;
-                const cat    = btn.dataset.cat;
-                if (!confirm(`Rimuovere "${sub}" da "${parent}"?`)) return;
-                const folder = catalogStructure[cat].find(i => i.title === parent);
-                if (folder) folder.children = (folder.children || []).filter(s => s !== sub);
-                await saveStructureToFirebase();
-                renderApCatalog(overlay.querySelector('.ap-filter-btn.active')?.dataset.filter || '', overlay.querySelector('#apCatSearch')?.value || '');
-            });
-        });
-
-        refreshFolderSelect();
-    }
-
-    function refreshFolderSelect() {
-        const sel = overlay.querySelector('#apSubFolder');
-        if (!sel) return;
-        const allFolders = [
-            ...(catalogStructure.serietv || []).filter(i=>i.type==='folder').map(i=>({...i,_cat:'serietv'})),
-            ...(catalogStructure.film    || []).filter(i=>i.type==='folder').map(i=>({...i,_cat:'film'}))
-        ].sort((a,b)=>a.title.localeCompare(b.title,'it'));
-        sel.innerHTML = allFolders.length
-            ? allFolders.map(f => `<option value="${esc(f.title)}" data-cat="${f._cat}">${esc(f.title)}</option>`).join('')
-            : '<option value="">— nessuna cartella —</option>';
-    }
-
-    function updateCategoryCounters() { updateAllCategoryCounters(); }
-
-    // Aggiungi titolo singolo o cartella
-    overlay.querySelector('#apAddTitle').addEventListener('click', async () => {
-        const titleInput = overlay.querySelector('#apNewTitle');
-        const catSel     = overlay.querySelector('#apNewCat');
-        const typeSel    = overlay.querySelector('#apNewType');
-        const title      = titleInput.value.trim();
-        const catKey     = catSel.value === 'cat-serietv' ? 'serietv' : 'film';
-        const isFolder   = typeSel.value === 'folder';
-        if (!title) { titleInput.focus(); return; }
-
-        const exists = (catalogStructure[catKey] || []).find(i => i.title === title);
-        if (exists) { alert('Titolo già presente!'); return; }
-
-        const newItem = isFolder
-            ? { type: 'folder', title, children: [] }
-            : { type: 'single', title };
-
-        if (!catalogStructure[catKey]) catalogStructure[catKey] = [];
-        catalogStructure[catKey].push(newItem);
-        catalogStructure[catKey].sort((a,b) => a.title.localeCompare(b.title,'it'));
-
-        await saveStructureToFirebase();
-        titleInput.value = '';
-        renderApCatalog();
-    });
-
-    // Aggiungi sub-item a cartella
-    overlay.querySelector('#apAddSub').addEventListener('click', async () => {
-        const subInput    = overlay.querySelector('#apSubTitle');
-        const folderSel   = overlay.querySelector('#apSubFolder');
-        const subTitle    = subInput.value.trim();
-        const folderOpt   = folderSel.options[folderSel.selectedIndex];
-        const parentTitle = folderOpt?.value;
-        const catKey      = folderOpt?.dataset.cat;
-        if (!subTitle)    { subInput.focus(); return; }
-        if (!parentTitle) { alert('Nessuna cartella disponibile.'); return; }
-
-        const folder = (catalogStructure[catKey] || []).find(i => i.title === parentTitle);
-        if (!folder) { alert('Cartella non trovata.'); return; }
-        if ((folder.children || []).includes(subTitle)) { alert('Sotto-titolo già presente!'); return; }
-        if (!folder.children) folder.children = [];
-        folder.children.push(subTitle);
-
-        await saveStructureToFirebase();
-        subInput.value = '';
-        renderApCatalog();
-    });
-
-    renderApRequests();
-    renderApEvased();
-    renderApSugg();
-    renderApCatalog();
-    renderApRecent();
-
-    // ── Novità ──
-    function renderApRecent() {
-        const el = overlay.querySelector('#ap-recent-list');
-        if (!el) return;
-        if (!recentItems.length) { el.innerHTML = '<div class="ap-empty">Nessuna novità inserita.</div>'; return; }
-        el.innerHTML = recentItems.map(item => {
-            const t = TYPE_LABELS[item.type] || { icon: '', label: '' };
-            return `<div class="ap-item" data-key="${esc(item._key)}">
-                <div class="ap-item-info">
-                    <span class="ap-item-title">${esc(item.title)}</span>
-                    <span class="ap-item-meta">${t.label}</span>
-                </div>
-                <div class="ap-item-actions">
-                    <button class="ap-btn ap-btn-edit" data-key="${esc(item._key)}" title="Modifica">✏️</button>
-                    <button class="ap-btn ap-btn-del"  data-key="${esc(item._key)}" title="Rimuovi">✕</button>
-                </div>
-            </div>
-            <div class="ap-inline-edit" id="edit-${esc(item._key)}" style="display:none">
-                <input type="text" class="ap-edit-title" value="${esc(item.title)}" placeholder="Titolo">
-                <select class="ap-edit-type">
-                    <option value="serie-completa" ${item.type==='serie-completa'?'selected':''}>Serie TV completa</option>
-                    <option value="serie-stagione" ${item.type==='serie-stagione'?'selected':''}>Stagione singola</option>
-                    <option value="film-cartella"  ${item.type==='film-cartella' ?'selected':''}>Raccolta Film</option>
-                    <option value="film-singolo"   ${item.type==='film-singolo'  ?'selected':''}>Film singolo</option>
-                </select>
-                <div style="display:flex;gap:6px;margin-top:4px">
-                    <button class="ap-btn-add ap-edit-save"   data-key="${esc(item._key)}" data-addedat="${item.addedAt||0}" style="flex:1">Salva</button>
-                    <button class="ap-btn    ap-edit-cancel"  data-key="${esc(item._key)}" style="flex:0.5">Annulla</button>
-                </div>
-            </div>`;
-        }).join('');
-
-        el.querySelectorAll('.ap-btn-edit').forEach(btn => {
-            btn.addEventListener('click', () => {
-                el.querySelectorAll('.ap-inline-edit').forEach(d => d.style.display = 'none');
-                const editDiv = el.querySelector('#edit-' + btn.dataset.key);
-                if (editDiv) editDiv.style.display = 'block';
-            });
-        });
-        el.querySelectorAll('.ap-edit-cancel').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const editDiv = el.querySelector('#edit-' + btn.dataset.key);
-                if (editDiv) editDiv.style.display = 'none';
-            });
-        });
-        el.querySelectorAll('.ap-edit-save').forEach(btn => {
-            btn.addEventListener('click', async () => {
-                const editDiv  = el.querySelector('#edit-' + btn.dataset.key);
-                const newTitle = editDiv.querySelector('.ap-edit-title').value.trim();
-                const newType  = editDiv.querySelector('.ap-edit-type').value;
-                if (!newTitle) { editDiv.querySelector('.ap-edit-title').focus(); return; }
-                try {
-                    await set(ref(db, 'recentlyAdded/' + btn.dataset.key), {
-                        title: newTitle, type: newType,
-                        addedAt: parseInt(btn.dataset.addedat) || Date.now()
-                    });
-                    editDiv.style.display = 'none';
-                } catch(e) { alert('Errore: ' + e.message); }
-            });
-        });
-        el.querySelectorAll('.ap-btn-del').forEach(btn => {
-            btn.addEventListener('click', async () => {
-                if (!confirm('Rimuovere questa novità?')) return;
-                try { await remove(ref(db, 'recentlyAdded/' + btn.dataset.key)); }
-                catch(e) { alert('Errore: ' + e.message); }
-            });
-        });
-    }
-
-    overlay.querySelector('#apAddRecent')?.addEventListener('click', async () => {
-        const titleInput = overlay.querySelector('#apRecentTitle');
-        const typeInput  = overlay.querySelector('#apRecentType');
-        const title      = titleInput.value.trim();
-        const type       = typeInput.value;
-        if (!title) { titleInput.focus(); return; }
-        try {
-            await push(recentRef, { title, type, addedAt: Date.now() });
-            titleInput.value = '';
-        } catch(e) { alert('Errore: ' + e.message); }
-    });
-
-    // ── Contatori — precompila con valori da Firebase ──
-    const counterKeys = ['folders-serietv','episodes-serietv','folders-film','episodes-film'];
-    counterKeys.forEach(async key => {
-        try {
-            const snap = await get(ref(db, 'counters/' + key));
-            if (snap.exists()) {
-                const val    = snap.val();
-                const target = document.getElementById(key === 'catalog-total' ? 'catalogTotalNum' : key);
-                if (target) target.textContent = val;
-                const inputMap = {
-                    'folders-serietv':  'apFoldersTV',
-                    'episodes-serietv': 'apEpisodesTV',
-                    'folders-film':     'apFoldersFilm',
-                    'episodes-film':    'apEpisodesFilm',
-                    'catalog-total':    'apTotalCat'
-                };
-                const inp = overlay.querySelector('#' + inputMap[key]);
-                if (inp) inp.value = val;
-            }
-        } catch(e) {}
-    });
-
-    // Salva contatori su Firebase
-    overlay.querySelectorAll('.ap-counter-save').forEach(btn => {
-        btn.addEventListener('click', async () => {
-            const input  = overlay.querySelector('#' + btn.dataset.input);
-            const target = document.getElementById(btn.dataset.target);
-            if (!input || !target) return;
-            const val = input.value.trim();
-            if (!val) return;
-            // Salva solo il numero su Firebase, il suffisso è fisso nel codice
-            const numOnly = val.replace(/[^0-9]/g, '');
-            const sfx = { 'folders-serietv':' cart.','episodes-serietv':' ep.','folders-film':' cart.','episodes-film':' titoli' };
-            target.textContent = numOnly + (sfx[btn.dataset.key] || '');
-            try { await set(ref(db, 'counters/' + btn.dataset.key), numOnly); }
-            catch(e) { alert('Errore salvataggio: ' + e.message); }
-        });
-    });
-
-    // Filtri categoria catalogo
-    overlay.querySelectorAll('.ap-filter-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
-            overlay.querySelectorAll('.ap-filter-btn').forEach(b => b.classList.remove('active'));
-            this.classList.add('active');
-            const search = overlay.querySelector('#apCatSearch');
-            if (search) search.value = '';
-            renderApCatalog(this.dataset.filter);
-        });
-    });
-
-    // Ricerca nel catalogo admin
-    const apCatSearch = overlay.querySelector('#apCatSearch');
-    if (apCatSearch) {
-        apCatSearch.addEventListener('input', function() {
-            const q         = this.value.trim().toLowerCase();
-            const filterCat = overlay.querySelector('.ap-filter-btn.active')?.dataset.filter || '';
-            renderApCatalog(filterCat, q);
-        });
-    }
-
-    // Aggiorna il pannello quando cambiano i dati Firebase
-    window._apRenderReq  = renderApRequests;
-    window._apRenderEv   = renderApEvased;
-    window._apRenderSugg = renderApSugg;
+/* Stelle nel form consigliati */
+.sugg-form-stars {
+    display: flex; align-items: center; flex-wrap: wrap; gap: 1px;
+    min-height: 32px; padding: 4px 0;
+}
+.sugg-form-stars-hint {
+    font-size: 12px; color: var(--low); font-style: italic;
 }
 
-// ============================================
-// CONTATORI — carica da Firebase all'avvio
-// ============================================
+/* ── Classifica: layout a due righe ── */
+.sugg-item-top {
+    display: flex; align-items: flex-start; gap: 8px;
+}
+.sugg-title-wrap {
+    flex: 1; min-width: 0;
+    display: flex; flex-direction: column; gap: 2px;
+}
+.sugg-item-bottom {
+    display: flex; align-items: center;
+    justify-content: space-between;
+    gap: 8px; flex-wrap: wrap;
+    margin-top: 2px;
+    padding-top: 6px;
+    border-top: 1px solid var(--border);
+}
+.sugg-avg-wrap { display: flex; align-items: center; flex: 1; min-width: 0; }
 
-onValue(countersRef, snap => {
-    const data = snap.val() || {};
-    const map = {
-        'folders-serietv':  'folders-serietv',
-        'episodes-serietv': 'episodes-serietv',
-        'folders-film':     'folders-film',
-        'episodes-film':    'episodes-film',
-    };
-    const suffixes = {
-        'folders-serietv':  ' cart.',
-        'episodes-serietv': ' ep.',
-        'folders-film':     ' cart.',
-        'episodes-film':    ' titoli'
-    };
-    Object.entries(map).forEach(([key, elId]) => {
-        const el = document.getElementById(elId);
-        if (el && data[key]) {
-            // Salva solo il numero, aggiungi suffisso fisso
-            const num = String(data[key]).replace(/[^0-9]/g, '');
-            el.textContent = num + (suffixes[key] || '');
-        }
-    });
-});
+/* ── Bottone Vota nella classifica ── */
+.btn-sugg-vote-open {
+    font-family: var(--font-sans); font-size: 13px; font-weight: 700;
+    padding: 8px 18px; border-radius: var(--r-pill);
+    background: var(--teal-dim); border: 1.5px solid var(--teal-dim2);
+    color: var(--teal-light); cursor: pointer; white-space: nowrap;
+    transition: background .15s, transform .1s;
+}
+.btn-sugg-vote-open:hover { background: rgba(42,157,143,.3); transform: scale(1.03); }
+.btn-sugg-vote-open:active { transform: scale(.97); }
 
-// ============================================
-// WATCHLIST
-// ============================================
-let watchlistUnsubscribe = null;  // listener Firebase attivo
+/* ── Avatar nella cartella (solo iniziali, niente colore sfondo) ── */
+.ci-folder-avatars {
+    display: flex; gap: 4px; flex-wrap: wrap;
+    padding: 0 12px 8px;
+}
+.ci-folder-avatars .ci-avatar {
+    background: none !important;
+    border-color: var(--border2) !important;
+    font-size: 9px;
+}
+.ci-folder-avatars .ci-avatar.seen    { color: var(--green); border-color: var(--green-brd) !important; }
+.ci-folder-avatars .ci-avatar.watching{ color: var(--yellow); border-color: var(--yellow-brd) !important; }
 
-function isInWatchlist(firebaseTitle) {
-    return !!watchlistData[titleToKey(firebaseTitle)];
+/* ── Area tocco cartella più grande ── */
+.catalog-folder > .ci-main {
+    padding: 12px 4px;    /* più spazio verticale per il tocco */
+    min-height: 52px;
+    align-items: center;
+}
+.ci-folder-toggle {
+    /* area tocco aumentata con padding invisibile */
+    padding: 12px 8px;
+    margin: -12px -4px;
+    font-size: 13px;
 }
 
-async function toggleWatchlist(firebaseTitle, displayTitle) {
-    const nick = getNickname();
-    if (!nick) { alert('Inserisci prima il tuo nickname nel popup del titolo.'); return; }
-    const key  = titleToKey(firebaseTitle);
-    const path = ref(db, 'watchlist/' + nick + '/' + key);
-    try {
-        if (isInWatchlist(firebaseTitle)) {
-            await remove(path);
-        } else {
-            await set(path, { title: displayTitle, addedAt: Date.now() });
-        }
-    } catch(e) { alert('Errore watchlist: ' + e.message); }
+/* ═══════════════════════════════════════════
+   CARTELLE — nessun cambio colore in nessuno stato
+═══════════════════════════════════════════ */
+.catalog-folder,
+.catalog-folder:hover,
+.catalog-folder:focus,
+.catalog-folder:active,
+.catalog-folder.folder-open,
+.catalog-folder.folder-open:hover {
+    background: var(--surface2) !important;
+    border-color: var(--border) !important;
+    box-shadow: none !important;
 }
 
-function loadWatchlist(nick) {
-    // Rimuovi listener precedente
-    if (watchlistUnsubscribe) { watchlistUnsubscribe(); watchlistUnsubscribe = null; }
-    if (!nick) return;
+.catalog-subitem,
+.catalog-subitem:hover,
+.catalog-subitem:focus,
+.catalog-subitem:active {
+    background: var(--surface2) !important;
+    border-left-color: var(--teal-dim2) !important;
+    border-color: var(--border) !important;
+}
+.catalog-subitem:hover .ci-name { color: var(--hi); }
 
-    const nickRef = ref(db, 'watchlist/' + nick);
-    watchlistUnsubscribe = onValue(nickRef, snap => {
-        watchlistData = snap.val() || {};
-        renderWatchlist(nick);
-        // Aggiorna cuori visibili nel catalogo
-        document.querySelectorAll('.ci-heart').forEach(h => {
-            const ft = h.dataset.firebaseTitle;
-            h.textContent = isInWatchlist(ft) ? '♥' : '♡';
-            h.classList.toggle('ci-heart-active', isInWatchlist(ft));
-        });
-    });
+.catalog-folder > .ci-main:hover,
+.catalog-folder > .ci-main:active {
+    background: none !important;
 }
 
-function renderWatchlist(nick) {
-    const el = document.getElementById('watchlistContent');
-    if (!el) return;
-
-    const items = Object.entries(watchlistData)
-        .sort((a, b) => (b[1].addedAt || 0) - (a[1].addedAt || 0));
-
-    if (!items.length) {
-        el.innerHTML = '<div class="catalog-empty">La tua watchlist è vuota.<br>Aggiungi titoli dal catalogo mettendo un ♥ al titolo scelto.</div>';
-        return;
-    }
-
-    el.innerHTML = '<ul class="watchlist-list">' +
-        items.map(([key, val]) => `
-            <li class="watchlist-item">
-                <span class="watchlist-title">${esc(val.title || key)}</span>
-                <button class="watchlist-remove" data-key="${key}" data-nick="${esc(nick)}" title="Rimuovi dalla watchlist">
-                    <span class="wl-remove-icon">♥</span>
-                    <span class="wl-remove-label">Rimuovi</span>
-                </button>
-            </li>`
-        ).join('') +
-        '</ul>';
-
-    el.querySelectorAll('.watchlist-remove').forEach(btn => {
-        btn.addEventListener('click', async () => {
-            try { await remove(ref(db, 'watchlist/' + btn.dataset.nick + '/' + btn.dataset.key)); }
-            catch(e) { alert('Errore: ' + e.message); }
-        });
-    });
+/* Messaggio errore form */
+.form-error {
+    background: rgba(248,113,113,.12);
+    border: 1px solid rgba(248,113,113,.35);
+    color: #f87171;
+    font-size: 13px; font-weight: 600;
+    padding: 10px 14px; border-radius: var(--r-input);
+    margin-bottom: 12px;
+    animation: fadeSlideIn .2s ease;
 }
 
-// Tab bar catalogo / watchlist
-document.querySelectorAll('.catalog-tab').forEach(tab => {
-    tab.addEventListener('click', function() {
-        document.querySelectorAll('.catalog-tab').forEach(t => t.classList.remove('active'));
-        this.classList.add('active');
-        currentCatalogTab = this.dataset.ctab;
-        const catEl  = document.getElementById('catalogContainer');
-        const catSearch = document.querySelector('.catalog-search-wrap');
-        const wlEl   = document.getElementById('watchlistContainer');
-        const recentEl = document.getElementById('recentContainer');
-        const ptEl = document.getElementById('playtimeContainer');
-        if (currentCatalogTab === 'watchlist') {
-            catEl.style.display    = 'none';
-            if (catSearch) catSearch.style.display = 'none';
-            wlEl.style.display     = 'block';
-            if (recentEl) recentEl.style.display = 'none';
-            if (ptEl) ptEl.style.display = 'none';
-            const inp = document.getElementById('watchlistNickInput');
-            const nick = getNickname();
-            if (nick && inp) { inp.value = nick; loadWatchlist(nick); }
-        } else if (currentCatalogTab === 'recent') {
-            catEl.style.display    = 'none';
-            if (catSearch) catSearch.style.display = 'none';
-            wlEl.style.display     = 'none';
-            if (recentEl) recentEl.style.display = 'block';
-            if (ptEl) ptEl.style.display = 'none';
-            renderRecent();
-        } else if (currentCatalogTab === 'playtime') {
-            catEl.style.display    = 'none';
-            if (catSearch) catSearch.style.display = 'none';
-            wlEl.style.display     = 'none';
-            if (recentEl) recentEl.style.display = 'none';
-            if (ptEl) ptEl.style.display = 'block';
-            renderPlaytime();
-        } else {
-            catEl.style.display    = 'block';
-            if (catSearch) catSearch.style.display = '';
-            wlEl.style.display     = 'none';
-            if (recentEl) recentEl.style.display = 'none';
-            if (ptEl) ptEl.style.display = 'none';
-        }
-    });
-});
+/* Forza colore default su tutto il catalogo — nessun teal/verde su hover/espansione */
+.catalog-cat-btn[aria-expanded="true"] .cat-name,
+.catalog-cat-btn:hover .cat-name,
+.catalog-folder .ci-name,
+.catalog-folder.folder-open .ci-name,
+.catalog-subitem .ci-name,
+.catalog-subitem:hover .ci-name { color: var(--hi) !important; }
 
-// Bottone "Carica"
-document.getElementById('watchlistNickBtn')?.addEventListener('click', () => {
-    const nick = document.getElementById('watchlistNickInput')?.value.trim();
-    if (!nick) return;
-    saveNickname(nick);
-    loadWatchlist(nick);
-});
+/* Bottone contatore voti nella classifica */
+.sugg-votes-btn {
+    font-family: var(--font-sans); font-size: 12px; font-weight: 600;
+    background: none; border: none; cursor: pointer;
+    color: var(--low); padding: 0;
+    text-decoration: underline; text-decoration-style: dotted;
+    transition: color .15s;
+}
+.sugg-votes-btn:hover { color: var(--mid); }
 
-// ============================================
-// NOVITÀ — FIREBASE LISTENER
-// ============================================
-onValue(recentRef, snap => {
-    const raw = snap.val();
-    recentItems = raw
-        ? Object.entries(raw)
-            .map(([k,v]) => ({...v, _key: k}))
-            .sort((a,b) => (b.addedAt||0) - (a.addedAt||0))
-            .slice(0,10)
-        : [];
-    if (currentCatalogTab === 'recent') renderRecent();
-    // Aggiorna pannello admin se aperto
-    const apList = document.querySelector('#ap-recent-list');
-    if (apList && typeof renderApRecent === 'function') renderApRecent();
-});
+/* Lista votanti nel popup */
+.voters-list { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
+.voter-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 12px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 10px;
+}
+.voter-avatar {
+    width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
+    background: var(--teal-dim); border: 1.5px solid var(--teal-dim2);
+    color: var(--teal-light); font-size: 13px; font-weight: 800;
+    display: flex; align-items: center; justify-content: center;
+}
+.voter-nick  { flex: 1; font-size: 14px; font-weight: 600; color: var(--hi); }
+.voter-score { display: flex; align-items: center; }
+.voter-num   { font-size: 13px; font-weight: 700; color: var(--yellow); margin-left: 6px; white-space: nowrap; }
 
-// ============================================
-// NOVITÀ — RENDER
-// ============================================
-const TYPE_LABELS = {
-    'film-singolo':   { icon: '', label: 'Film singolo' },
-    'film-cartella':  { icon: '', label: 'Raccolta Film' },
-    'serie-completa': { icon: '', label: 'Serie TV' },
-    'serie-stagione': { icon: '', label: 'Stagione' },
-};
-
-function renderRecent() {
-    const el = document.getElementById('recentList');
-    if (!el) return;
-    if (!recentItems.length) {
-        el.innerHTML = '<div class="catalog-empty">Nessuna novità ancora.<br>Aggiungile dal pannello admin.</div>';
-        return;
-    }
-    el.innerHTML = recentItems.map(item => {
-        const t = TYPE_LABELS[item.type] || { icon: '🎬', label: item.type || '' };
-        return `<div class="recent-item">
-            ${t.icon ? `<span class="recent-icon">${t.icon}</span>` : ''}
-            <div class="recent-info">
-                <span class="recent-title">${esc(item.title)}</span>
-                <span class="recent-meta">
-                    <span class="recent-type-badge">${t.label}</span>
-                </span>
-            </div>
-        </div>`;
-    }).join('');
+/* Tooltip avatar — mostra nome completo al tap/hover */
+.ci-avatar {
+    position: relative;
+    cursor: pointer;
+}
+.ci-avatar::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(30,40,60,.97);
+    color: var(--hi);
+    font-size: 12px;
+    font-weight: 700;
+    padding: 5px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border2);
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity .18s;
+    z-index: 200;
+    box-shadow: 0 4px 16px rgba(0,0,0,.5);
+}
+.ci-avatar:hover::after,
+.ci-avatar:focus::after,
+.ci-avatar.tooltip-visible::after {
+    opacity: 1;
 }
 
-// ============================================
-// STATISTICHE VISIONE (playtime)
-// ============================================
-let playtimeData  = null;
-let currentPtTab  = 'all_time';
-
-onValue(playtimeRef, (snap) => {
-    playtimeData = snap.val();
-    if (currentCatalogTab === 'playtime') renderPlaytime();
-});
-
-function renderPlaytime() {
-    const content = document.getElementById('playtimeContent');
-    const updated = document.getElementById('playtimeUpdated');
-    if (!content) return;
-
-    if (!playtimeData) {
-        content.innerHTML = '<div class="catalog-empty">Nessun dato disponibile ancora.</div>';
-        return;
-    }
-
-    const section = playtimeData[currentPtTab] || {};
-    const total   = section['_total'] || 0;
-    const isMonth = currentPtTab === 'this_month';
-    const label   = isMonth
-        ? (playtimeData.month_label || 'Questo mese')
-        : 'All time';
-
-    // Filtra: nel mese corrente, nascondi chi ha meno di 30 minuti (0.5h)
-    const minHours = isMonth ? 0.5 : 0;
-    const users = Object.entries(section)
-        .filter(([k, v]) => k !== '_total' && v >= minHours)
-        .sort((a, b) => b[1] - a[1]);
-
-    const maxHours = users.length ? users[0][1] : 1;
-    const medals = ['🥇', '🥈', '🥉'];
-
-    // Render tab bar interna
-    const tabBar = `
-        <div class="tab-bar" id="ptTabBar" style="margin-bottom:16px">
-            <button class="tab ${currentPtTab === 'all_time' ? 'active' : ''}" data-pt="all_time">All time</button>
-            <button class="tab ${currentPtTab === 'this_month' ? 'active' : ''}" data-pt="this_month">Questo mese</button>
-        </div>`;
-
-    content.innerHTML = tabBar + `
-        <div class="pt-total">
-            <span class="pt-total-label">${label} — NULLAFACENZA</span>
-            <span class="pt-total-value">${formatHours(total)}</span>
-        </div>
-        <div class="pt-users">
-            ${users.length === 0
-                ? '<div class="catalog-empty">Nessuna visione registrata.</div>'
-                : users.map(([name, hours], i) => {
-                    const pct = Math.round((hours / maxHours) * 100);
-                    return `<div class="pt-row">
-                        <div class="pt-row-top">
-                            <span class="pt-medal">${medals[i] || ''}</span>
-                            <span class="pt-name">${esc(name)}</span>
-                            <span class="pt-hours">${formatHours(hours)}</span>
-                        </div>
-                        <div class="pt-bar-track">
-                            <div class="pt-bar-fill" style="width:${pct}%"></div>
-                        </div>
-                    </div>`;
-                }).join('')
-            }
-        </div>`;
-
-    // Listener tab interne
-    content.querySelectorAll('[data-pt]').forEach(btn => {
-        btn.addEventListener('click', function() {
-            currentPtTab = this.dataset.pt;
-            renderPlaytime();
-        });
-    });
-
-    if (updated && playtimeData.updated_at) {
-        // Mostra solo il giorno (dd/mm/yyyy), senza orario
-        const dayOnly = playtimeData.updated_at.split(' ')[0];
-        updated.textContent = `Aggiornato il ${dayOnly}`;
-    }
+/* Tooltip allineato a destra se vicino al bordo */
+.ci-avatar.tooltip-right-align::after {
+    left: auto;
+    right: 0;
+    transform: none;
 }
 
-function formatHours(h) {
-    if (h < 1) return `${Math.round(h * 60)} min`;
-    const totalH = Math.floor(h);
-    const giorni = Math.floor(totalH / 24);
-    const oreRim = totalH % 24;
-    if (giorni > 0) {
-        return `${totalH}h (${giorni}g ${oreRim}h)`;
-    }
-    return `${totalH}h`;
+/* ═══════════════════════════════════════════
+   SEZIONE NOVITÀ
+═══════════════════════════════════════════ */
+.recent-list { display: flex; flex-direction: column; gap: 8px; }
+
+.recent-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 14px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 10px; animation: fadeSlideIn .2s ease;
+    transition: border-color .15s;
 }
+.recent-item:hover { border-color: var(--border2); }
 
-// ============================================
-// INIT
-// ============================================
-isAdminMode = checkAdmin();
-renderAdminBtn();
-initCatalog();
+.recent-icon { font-size: 22px; flex-shrink: 0; }
 
-const savedNick = getNickname();
-if (savedNick) {
-    const sn = document.getElementById('suggNick');
-    if (sn) sn.value = savedNick;
-    loadWatchlist(savedNick);
+.recent-info { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
+.recent-title { font-size: 15px; font-weight: 600; color: var(--hi); word-break: break-word; }
+.recent-meta  { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+.recent-type-badge {
+    font-size: 11px; font-weight: 700;
+    padding: 2px 8px; border-radius: var(--r-pill);
+    background: var(--teal-dim); color: var(--teal-light);
+    border: 1px solid var(--teal-dim2);
+    white-space: nowrap;
 }
+.recent-date { font-size: 11px; color: var(--low); }
 
-// Inizializza stelle nel form consigliati
-initSuggFormStars();
+/* Edit inline aggiunti di recente */
+.ap-inline-edit {
+    padding: 8px 10px 10px;
+    background: var(--surface3);
+    border: 1px solid var(--border2);
+    border-radius: 8px;
+    margin-top: -4px;
+    margin-bottom: 4px;
+    display: flex; flex-direction: column; gap: 6px;
+}
+.ap-inline-edit input,
+.ap-inline-edit select { font-size: 13px; padding: 7px 10px; }
+.ap-edit-cancel { font-size: 12px !important; color: var(--low) !important; background: none !important; border: 1px solid var(--border) !important; }
+
+/* ============================================
+   STATISTICHE VISIONE (playtime)
+   ============================================ */
+.pt-total {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 16px 20px;
+    background: var(--surface-2, #f4f6fb);
+    border-radius: 12px;
+    margin-bottom: 20px;
+}
+.pt-total-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-2, #6b7a99);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.pt-total-value {
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--accent, #5b7cfa);
+}
+.pt-users {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+.pt-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.pt-row-top {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.pt-medal {
+    font-size: 18px;
+    width: 24px;
+    text-align: center;
+    flex-shrink: 0;
+}
+.pt-name {
+    font-size: 15px;
+    font-weight: 600;
+    color: #ffffff;
+    flex: 1;
+}
+.pt-hours {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--accent, #5b7cfa);
+}
+.pt-bar-track {
+    height: 6px;
+    background: var(--surface-2, #eef0f7);
+    border-radius: 99px;
+    overflow: hidden;
+    margin-left: 32px;
+}
+.pt-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent, #5b7cfa), #a78bfa);
+    border-radius: 99px;
+    transition: width 0.6s ease;
+}
+.playtime-updated {
+    margin-top: 16px;
+    text-align: right;
+    font-size: 12px;
+    color: var(--text-2, #6b7a99);
+    opacity: 0.7;
+}
