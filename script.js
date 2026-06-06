@@ -2383,6 +2383,9 @@ onValue(playtimeRef, (snap) => {
     if (currentCatalogTab === 'playtime') renderPlaytime();
 });
 
+// sottotab all-time: 'all_time' | 'all_time_film' | 'all_time_tv'
+let currentPtSubTab = 'all_time';
+
 function renderPlaytime() {
     const content = document.getElementById('playtimeContent');
     const updated = document.getElementById('playtimeUpdated');
@@ -2393,14 +2396,14 @@ function renderPlaytime() {
         return;
     }
 
-    const section = playtimeData[currentPtTab] || {};
-    const total   = section['_total'] || 0;
     const isMonth = currentPtTab === 'this_month';
+    const dataKey = isMonth ? 'this_month' : currentPtSubTab;
+    const section = playtimeData[dataKey] || {};
+    const total   = section['_total'] || 0;
     const label   = isMonth
         ? (playtimeData.month_label || 'Questo mese')
         : 'All time';
 
-    // Filtra: nel mese corrente, nascondi chi ha meno di 30 minuti (0.5h)
     const minHours = isMonth ? 0.5 : 0;
     const users = Object.entries(section)
         .filter(([k, v]) => k !== '_total' && v >= minHours)
@@ -2409,14 +2412,22 @@ function renderPlaytime() {
     const maxHours = users.length ? users[0][1] : 1;
     const medals = ['🥇', '🥈', '🥉'];
 
-    // Render tab bar interna
+    // Tab bar principale
     const tabBar = `
-        <div class="tab-bar" id="ptTabBar" style="margin-bottom:16px">
-            <button class="tab ${currentPtTab === 'all_time' ? 'active' : ''}" data-pt="all_time">All time</button>
-            <button class="tab ${currentPtTab === 'this_month' ? 'active' : ''}" data-pt="this_month">Questo mese</button>
+        <div class="tab-bar" id="ptTabBar" style="margin-bottom:12px">
+            <button class="tab ${!isMonth ? 'active' : ''}" data-pt="all_time">All time</button>
+            <button class="tab ${isMonth ? 'active' : ''}" data-pt="this_month">Questo mese</button>
         </div>`;
 
-    content.innerHTML = tabBar + `
+    // Sottotab solo per All time
+    const subTabBar = !isMonth ? `
+        <div class="tab-bar pt-subtab-bar" style="margin-bottom:16px">
+            <button class="tab ${currentPtSubTab === 'all_time' ? 'active' : ''}" data-ptsub="all_time">Totale</button>
+            <button class="tab ${currentPtSubTab === 'all_time_film' ? 'active' : ''}" data-ptsub="all_time_film">🎬 Film</button>
+            <button class="tab ${currentPtSubTab === 'all_time_tv' ? 'active' : ''}" data-ptsub="all_time_tv">📺 Serie TV</button>
+        </div>` : '';
+
+    content.innerHTML = tabBar + subTabBar + `
         <div class="pt-total">
             <span class="pt-total-label">${label} — NULLAFACENZA</span>
             <span class="pt-total-value">${formatHours(total)}</span>
@@ -2440,7 +2451,7 @@ function renderPlaytime() {
             }
         </div>`;
 
-    // Listener tab interne
+    // Listener tab principali
     content.querySelectorAll('[data-pt]').forEach(btn => {
         btn.addEventListener('click', function() {
             currentPtTab = this.dataset.pt;
@@ -2448,8 +2459,15 @@ function renderPlaytime() {
         });
     });
 
+    // Listener sottotab
+    content.querySelectorAll('[data-ptsub]').forEach(btn => {
+        btn.addEventListener('click', function() {
+            currentPtSubTab = this.dataset.ptsub;
+            renderPlaytime();
+        });
+    });
+
     if (updated && playtimeData.updated_at) {
-        // Mostra solo il giorno (dd/mm/yyyy), senza orario
         const dayOnly = playtimeData.updated_at.split(' ')[0];
         updated.textContent = `Aggiornato il ${dayOnly}`;
     }
