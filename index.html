@@ -76,6 +76,7 @@
                 <button class="catalog-tab active" data-ctab="catalog">Catalogo</button>
                 <button class="catalog-tab" data-ctab="watchlist">Watchlist</button>
                 <button class="catalog-tab" data-ctab="recent">Aggiunti di recente</button>
+                <button class="catalog-tab" data-ctab="playtime">📊 Statistiche</button>
             </div>
 
             <!-- VISTA CATALOGO -->
@@ -95,6 +96,14 @@
                 <div id="recentList" class="recent-list">
                     <div class="catalog-empty">Nessuna novità ancora.</div>
                 </div>
+            </div>
+
+            <!-- VISTA STATISTICHE -->
+            <div id="playtimeContainer" style="display:none">
+                <div id="playtimeContent">
+                    <div class="state-loading"><span class="spinner"></span> Caricamento…</div>
+                </div>
+                <div id="playtimeUpdated" class="playtime-updated"></div>
             </div>
 
             <!-- VISTA WATCHLIST -->
