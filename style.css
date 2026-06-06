@@ -1076,13 +1076,19 @@ input[type="search"]::placeholder { color: rgba(255,255,255,.35); }
     padding: 3px;
     margin-bottom: 16px;
     border: 1px solid var(--border);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
 }
+.catalog-tab-bar::-webkit-scrollbar { display: none; }
 .catalog-tab {
-    flex: 1; padding: 8px;
-    font-family: var(--font-sans); font-size: 13.5px; font-weight: 500;
+    flex: 1; padding: 8px 10px;
+    font-family: var(--font-sans); font-size: 13px; font-weight: 500;
     color: var(--low); background: none; border: none;
     border-radius: calc(var(--r-pill) - 3px); cursor: pointer;
     transition: background .18s, color .18s;
+    white-space: nowrap;
+    min-width: fit-content;
 }
 .catalog-tab:hover { color: var(--mid); }
 .catalog-tab.active {
@@ -1395,22 +1401,24 @@ input[type="search"]::placeholder { color: rgba(255,255,255,.35); }
    ============================================ */
 .pt-total {
     display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    padding: 16px 20px;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 14px 20px;
     background: var(--surface-2, #f4f6fb);
     border-radius: 12px;
     margin-bottom: 20px;
+    gap: 4px;
 }
 .pt-total-label {
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 600;
     color: var(--text-2, #6b7a99);
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
 .pt-total-value {
-    font-size: 26px;
+    font-size: 20px;
     font-weight: 700;
     color: var(--accent, #5b7cfa);
 }
@@ -1422,12 +1430,15 @@ input[type="search"]::placeholder { color: rgba(255,255,255,.35); }
 .pt-row {
     display: flex;
     flex-direction: column;
+    align-items: center;
     gap: 6px;
 }
 .pt-row-top {
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 8px;
+    width: 100%;
 }
 .pt-medal {
     font-size: 18px;
@@ -1440,18 +1451,21 @@ input[type="search"]::placeholder { color: rgba(255,255,255,.35); }
     font-weight: 600;
     color: #ffffff;
     flex: 1;
+    text-align: center;
 }
 .pt-hours {
     font-size: 15px;
     font-weight: 700;
     color: var(--accent, #5b7cfa);
+    text-align: right;
+    min-width: 70px;
 }
 .pt-bar-track {
     height: 6px;
     background: var(--surface-2, #eef0f7);
     border-radius: 99px;
     overflow: hidden;
-    margin-left: 32px;
+    width: 100%;
 }
 .pt-bar-fill {
     height: 100%;
@@ -1461,7 +1475,7 @@ input[type="search"]::placeholder { color: rgba(255,255,255,.35); }
 }
 .playtime-updated {
     margin-top: 16px;
-    text-align: right;
+    text-align: center;
     font-size: 12px;
     color: var(--text-2, #6b7a99);
     opacity: 0.7;
