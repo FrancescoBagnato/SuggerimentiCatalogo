@@ -2427,7 +2427,7 @@ function renderPlaytime() {
 
     content.innerHTML = tabBar + `
         <div class="pt-total">
-            <span class="pt-total-label">${label} — NULLAFACIENZA</span>
+            <span class="pt-total-label">${label} — NULLAFACENZA</span>
             <span class="pt-total-value">${formatHours(total)}</span>
         </div>
         <div class="pt-users">
