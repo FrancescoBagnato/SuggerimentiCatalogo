@@ -2404,12 +2404,15 @@ function renderPlaytime() {
 
     const section = playtimeData[currentPtTab] || {};
     const total   = section['_total'] || 0;
-    const label   = currentPtTab === 'this_month'
+    const isMonth = currentPtTab === 'this_month';
+    const label   = isMonth
         ? (playtimeData.month_label || 'Questo mese')
         : 'All time';
 
+    // Filtra: nel mese corrente, nascondi chi ha meno di 30 minuti (0.5h)
+    const minHours = isMonth ? 0.5 : 0;
     const users = Object.entries(section)
-        .filter(([k]) => k !== '_total')
+        .filter(([k, v]) => k !== '_total' && v >= minHours)
         .sort((a, b) => b[1] - a[1]);
 
     const maxHours = users.length ? users[0][1] : 1;
@@ -2424,7 +2427,7 @@ function renderPlaytime() {
 
     content.innerHTML = tabBar + `
         <div class="pt-total">
-            <span class="pt-total-label">${label}</span>
+            <span class="pt-total-label">${label} — NULLAFACIENZA</span>
             <span class="pt-total-value">${formatHours(total)}</span>
         </div>
         <div class="pt-users">
@@ -2455,13 +2458,21 @@ function renderPlaytime() {
     });
 
     if (updated && playtimeData.updated_at) {
-        updated.textContent = `Aggiornato il ${playtimeData.updated_at}`;
+        // Mostra solo il giorno (dd/mm/yyyy), senza orario
+        const dayOnly = playtimeData.updated_at.split(' ')[0];
+        updated.textContent = `Aggiornato il ${dayOnly}`;
     }
 }
 
 function formatHours(h) {
     if (h < 1) return `${Math.round(h * 60)} min`;
-    return `${h.toLocaleString('it-IT')} ore`;
+    const totalH = Math.floor(h);
+    const giorni = Math.floor(totalH / 24);
+    const oreRim = totalH % 24;
+    if (giorni > 0) {
+        return `${totalH}h (${giorni}g ${oreRim}h)`;
+    }
+    return `${totalH}h`;
 }
 
 // ============================================
