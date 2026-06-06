@@ -2461,9 +2461,9 @@ function formatHours(h) {
     const giorni = Math.floor(totalH / 24);
     const oreRim = totalH % 24;
     if (giorni > 0) {
-        return `${totalH}h (${giorni}g ${oreRim}h)`;
+        return `${totalH} h (${giorni} g ${oreRim} h)`;
     }
-    return `${totalH}h`;
+    return `${totalH} h`;
 }
 
 // ============================================
