@@ -41,7 +41,7 @@
                 <div class="field-row">
                     <div class="field">
                         <label for="title">Titolo</label>
-                        <input type="text" id="title" required placeholder="Breaking Bad" autocomplete="off">
+                        <input type="text" id="title" required placeholder="Breaking Bad" autocomplete="off" maxlength="120">
                     </div>
                     <div class="field field--sm">
                         <label for="type">Tipo</label>
@@ -54,11 +54,11 @@
                 </div>
                 <div class="field">
                     <label for="requester">Nickname</label>
-                    <input type="text" id="requester" required placeholder="Lorem Ipsum" autocomplete="off">
+                    <input type="text" id="requester" required placeholder="Lorem Ipsum" autocomplete="off" maxlength="30">
                 </div>
                 <div class="field">
                     <label for="notes">Note <span class="label-opt">opzionale</span></label>
-                    <textarea id="notes" rows="2" placeholder="Es: stagione 2, lingua originale…"></textarea>
+                    <textarea id="notes" rows="2" placeholder="Es: stagione 2, lingua originale…" maxlength="300"></textarea>
                 </div>
                 <button type="submit" class="btn-submit">
                     <span class="btn-submit-text">Invia richiesta</span>
@@ -130,11 +130,11 @@
                 <div class="field-row">
                     <div class="field">
                         <label for="suggTitle">Titolo consigliato</label>
-                        <input type="text" id="suggTitle" placeholder="Breaking Bad" autocomplete="off">
+                        <input type="text" id="suggTitle" placeholder="Breaking Bad" autocomplete="off" maxlength="120">
                     </div>
                     <div class="field field--sm">
                         <label for="suggNick">Nickname</label>
-                        <input type="text" id="suggNick" placeholder="Lorem Ipsum" autocomplete="off">
+                        <input type="text" id="suggNick" placeholder="Lorem Ipsum" autocomplete="off" maxlength="30">
                     </div>
                 </div>
                 <div class="field" style="margin-top:10px">
