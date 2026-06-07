@@ -69,6 +69,35 @@ function unesc(text) {
 }
 function titleToKey(title) { return title.replace(/[.#$\/\[\]]/g, '_'); }
 
+// ============================================
+// SICUREZZA INPUT
+// ============================================
+// Rimuove tag HTML, limita lunghezza e strip caratteri pericolosi
+function sanitize(text, maxLen = 200) {
+    if (typeof text !== 'string') return '';
+    return text
+        .replace(/<[^>]*>/g, '')           // strip tag HTML
+        .replace(/[<>"'`]/g, '')           // rimuovi caratteri pericolosi
+        .trim()
+        .slice(0, maxLen);
+}
+
+// Valida che un valore sia in un insieme consentito (whitelist)
+function allowedValue(val, allowed) {
+    return allowed.includes(val) ? val : '';
+}
+
+// Rate limiter semplice: max N invii per intervallo (ms)
+const _rateLimits = {};
+function rateLimited(key, maxCount = 3, intervalMs = 60000) {
+    const now = Date.now();
+    if (!_rateLimits[key]) _rateLimits[key] = [];
+    _rateLimits[key] = _rateLimits[key].filter(t => now - t < intervalMs);
+    if (_rateLimits[key].length >= maxCount) return true; // bloccato
+    _rateLimits[key].push(now);
+    return false;
+}
+
 function checkAdmin()  { return localStorage.getItem('isAdmin') === 'true'; }
 function getNickname() { return localStorage.getItem('catalogNick') || ''; }
 function saveNickname(n) { if (n) localStorage.setItem('catalogNick', n.trim()); }
@@ -288,9 +317,9 @@ document.getElementById('requestForm').addEventListener('submit', async function
     const btn = this.querySelector('.btn-submit');
     btn.disabled = true;
     btn.querySelector('.btn-submit-text').textContent = 'Invio…';
-    const titleVal     = document.getElementById('title').value.trim();
-    const typeVal      = document.getElementById('type').value;
-    const requesterVal = document.getElementById('requester').value.trim();
+    const titleVal     = sanitize(document.getElementById('title').value, 120);
+    const typeVal      = allowedValue(document.getElementById('type').value, ['Film', 'Serie TV']);
+    const requesterVal = sanitize(document.getElementById('requester').value, 30);
 
     // Validazione campi obbligatori
     let reqError = '';
@@ -303,12 +332,18 @@ document.getElementById('requestForm').addEventListener('submit', async function
         btn.querySelector('.btn-submit-text').textContent = 'Invia richiesta';
         return;
     }
+    if (rateLimited('request', 3, 60000)) {
+        showFormError('requestForm', 'Troppi invii. Aspetta un minuto.');
+        btn.disabled = false;
+        btn.querySelector('.btn-submit-text').textContent = 'Invia richiesta';
+        return;
+    }
 
     const payload = {
         title:     titleVal,
         type:      typeVal,
         requester: requesterVal,
-        notes:     document.getElementById('notes').value.trim(),
+        notes:     sanitize(document.getElementById('notes').value, 300),
         date:      new Date().toLocaleDateString('it-IT', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }),
         timestamp: Date.now()
     };
@@ -1295,9 +1330,9 @@ document.getElementById('suggSubmit').addEventListener('click', async () => {
     const titleEl  = document.getElementById('suggTitle');
     const nickEl   = document.getElementById('suggNick');
     const ratingEl = document.getElementById('suggFormRating');
-    const title    = titleEl.value.trim();
-    const nick     = nickEl.value.trim();
-    const rating   = parseFloat(ratingEl?.value || 0) || 0;
+    const title    = sanitize(titleEl.value, 120);
+    const nick     = sanitize(nickEl.value, 30);
+    const rating   = Math.min(10, Math.max(0, parseFloat(ratingEl?.value || 0) || 0));
 
     // Validazione campi obbligatori
     let suggError = '';
@@ -1306,6 +1341,10 @@ document.getElementById('suggSubmit').addEventListener('click', async () => {
     else if (!rating) suggError = 'Inserisci il tuo voto (1–10).';
     if (suggError) {
         showFormError('suggForm', suggError);
+        return;
+    }
+    if (rateLimited('suggest', 3, 60000)) {
+        showFormError('suggForm', 'Troppi invii. Aspetta un minuto.');
         return;
     }
     saveNickname(nick);
