@@ -289,7 +289,7 @@ document.getElementById('requestForm').addEventListener('submit', async function
         btn.querySelector('.btn-submit-text').textContent = 'Invia richiesta';
         return;
     }
-    if (rateLimited('request', 3, 60000)) {
+    if (rateLimited('request', 10, 60000)) {
         showFormError('requestForm', 'Troppi invii. Aspetta un minuto.');
         btn.disabled = false;
         btn.querySelector('.btn-submit-text').textContent = 'Invia richiesta';
@@ -1235,7 +1235,7 @@ document.getElementById('suggSubmit').addEventListener('click', async () => {
         showFormError('suggForm', suggError);
         return;
     }
-    if (rateLimited('suggest', 3, 60000)) {
+    if (rateLimited('suggest', 10, 60000)) {
         showFormError('suggForm', 'Troppi invii. Aspetta un minuto.');
         return;
     }
