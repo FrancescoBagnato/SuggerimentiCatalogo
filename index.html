@@ -15,7 +15,7 @@
 </head>
 <body>
 
-    <!-- ── TOP NAV ───────────────────────────── -->
+    
     <nav class="topnav">
         <div class="topnav-inner">
             <div class="brand">
@@ -26,7 +26,7 @@
         </div>
     </nav>
 
-    <!-- ── HERO ──────────────────────────────── -->
+    
     <header class="hero">
         <h1 class="hero-title">Cosa <em>vorresti vedere</em> dopo?</h1>
         <p class="hero-sub">Invia una richiesta, suggerisci un titolo o vota quello degli altri.</p>
@@ -34,7 +34,7 @@
 
     <main class="main">
 
-        <!-- ── FORM ───────────────────────────── -->
+        
         <section class="card" id="formCard">
             <div class="card-label">Nuova richiesta</div>
             <form id="requestForm" novalidate>
@@ -67,11 +67,11 @@
             </form>
         </section>
 
-        <!-- ── CATALOGO ───────────────────────── -->
+        
         <section class="card" id="catalogCard">
             <div class="card-label">CATALOGO SERVER</div>
 
-            <!-- TAB CATALOGO / WATCHLIST -->
+            
             <div class="catalog-tab-bar">
                 <button class="catalog-tab active" data-ctab="catalog">Catalogo</button>
                 <button class="catalog-tab" data-ctab="watchlist">Watchlist</button>
@@ -79,26 +79,26 @@
                 <button class="catalog-tab" data-ctab="playtime">Classifica</button>
             </div>
 
-            <!-- VISTA CATALOGO -->
+            
             <div id="catalogView">
                 <div class="catalog-search-wrap">
                     <input type="search" id="catalogSearch" class="catalog-search" placeholder="Cerca un titolo…" autocomplete="off">
                     <span class="catalog-search-icon">🔍</span>
                 </div>
-                <!-- Le categorie vengono generate da Firebase via JS -->
+                
                 <div id="catalogContainer">
                     <div class="state-loading"><span class="spinner"></span> Caricamento catalogo…</div>
                 </div>
             </div>
 
-            <!-- VISTA NOVITÀ -->
+            
             <div id="recentContainer" style="display:none">
                 <div id="recentList" class="recent-list">
                     <div class="catalog-empty">Nessuna novità ancora.</div>
                 </div>
             </div>
 
-            <!-- VISTA STATISTICHE -->
+            
             <div id="playtimeContainer" style="display:none">
                 <div id="playtimeContent">
                     <div class="state-loading"><span class="spinner"></span> Caricamento…</div>
@@ -106,7 +106,7 @@
                 <div id="playtimeUpdated" class="playtime-updated"></div>
             </div>
 
-            <!-- VISTA WATCHLIST -->
+            
             <div id="watchlistContainer" style="display:none">
                 <div class="watchlist-nick-bar">
                     <input type="text" id="watchlistNickInput" placeholder="Lorem Ipsum" autocomplete="off">
@@ -118,14 +118,14 @@
             </div>
         </section>
 
-        <!-- ── CONSIGLIATI ────────────────────── -->
+        
         <section class="card" id="suggestedCard">
             <div class="card-header-row">
                 <div class="card-label">Consigliati</div>
                 <span id="suggestedCount" class="pill">0</span>
             </div>
 
-            <!-- Form aggiunta consiglio -->
+            
             <div class="sugg-form" id="suggForm">
                 <div class="field-row">
                     <div class="field">
@@ -150,7 +150,7 @@
                 </button>
             </div>
 
-            <!-- Ordinamento -->
+            
             <div class="tab-bar" style="margin-top:20px" id="suggSortBar">
                 <button class="tab active" data-sugg-sort="rank">🏆 Classifica</button>
                 <button class="tab" data-sugg-sort="alpha">A → Z</button>
@@ -161,7 +161,7 @@
             </div>
         </section>
 
-        <!-- ── RICHIESTE ──────────────────────── -->
+        
         <section class="card" id="requestsCard">
             <div class="card-header-row">
                 <div class="card-label">Richieste</div>
@@ -181,20 +181,13 @@
 
     </main>
 
-
-    <!-- ── POPUP CATALOGO (generato via JS) ── -->
+    
     <div id="catalogPopupOverlay" class="popup-overlay" style="display:none"></div>
 
-    <!-- EmailJS SDK -->
+    
     <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
     <script>
-        // ============================================================
-        // EMAILJS CONFIG — sostituisci con i tuoi valori:
-        // 1. Registrati su https://www.emailjs.com (gratis)
-        // 2. Crea un Email Service (es. Gmail) → copia Service ID
-        // 3. Crea un Email Template → copia Template ID
-        // 4. Vai su Account → copia Public Key
-        // ============================================================
+
         const EMAILJS_PUBLIC_KEY  = '_F118Bb19X2wLAKAJ';
         const EMAILJS_SERVICE_ID  = 'service_dit5f7x';
         const EMAILJS_TEMPLATE_ID = 'template_o43njnb';
@@ -205,7 +198,7 @@
         }
 
         window.sendNewRequestEmail = function(title, type, requester, notes) {
-            if (EMAILJS_PUBLIC_KEY === 'LA_TUA_PUBLIC_KEY') return; // non configurato
+            if (EMAILJS_PUBLIC_KEY === 'LA_TUA_PUBLIC_KEY') return;
             emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
                 to_email:   NOTIFY_EMAIL,
                 title:      title,
