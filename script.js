@@ -2269,7 +2269,9 @@ function renderPlaytime() {
     const section = playtimeData[dataKey] || {};
     const total   = section['_total'] || 0;
     const label   = isAvg
-        ? 'Media giornaliera'
+        ? (currentPtSubTab === 'average_raw'
+            ? 'Calcolata su tutti i giorni dal primo utilizzo ad oggi'
+            : 'Calcolata solo sui giorni di utilizzo')
         : isMonth
             ? (playtimeData.month_label || 'Questo mese')
             : 'All time';
@@ -2305,7 +2307,7 @@ function renderPlaytime() {
 
     content.innerHTML = tabBar + subTabBar + `
         <div class="pt-total">
-            <span class="pt-total-label">${label} — NULLAFACENZA</span>
+            <span class="pt-total-label">${isAvg ? label : label + ' — NULLAFACENZA'}</span>
             <span class="pt-total-value">${formatValue(total)}</span>
         </div>
         <div class="pt-users">
