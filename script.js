@@ -1,5 +1,3 @@
-
-
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js';
 import {
     getDatabase, ref, push, onValue,
@@ -2292,7 +2290,7 @@ function renderPlaytime() {
         </div>`;
 
     const allSubTabs = isAvg
-        ? [['average_raw','Media grezza'],['average_active','Giorni attivi']]
+        ? [['average_raw','Media Grezza'],['average_active','Media Attiva']]
         : !isMonth
             ? [['all_time','Totale'],['all_time_film','Film'],['all_time_tv','Serie TV']]
             : [['this_month','Totale'],['this_month_film','Film'],['this_month_tv','Serie TV']];
