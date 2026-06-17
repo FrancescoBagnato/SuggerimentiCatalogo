@@ -1,3 +1,5 @@
+
+
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js';
 import {
     getDatabase, ref, push, onValue,
@@ -2257,18 +2259,24 @@ function renderPlaytime() {
         return;
     }
 
-    const isMonth = currentPtTab === 'this_month';
+    const isMonth  = currentPtTab === 'this_month';
+    const isAvg    = currentPtTab === 'average';
 
     if (isMonth && !currentPtSubTab.startsWith('this_month')) currentPtSubTab = 'this_month';
-    if (!isMonth && currentPtSubTab.startsWith('this_month')) currentPtSubTab = 'all_time';
+    if (!isMonth && !isAvg && currentPtSubTab.startsWith('this_month')) currentPtSubTab = 'all_time';
+    if (isAvg && !currentPtSubTab.startsWith('average')) currentPtSubTab = 'average_raw';
+    if (!isAvg && currentPtSubTab.startsWith('average')) currentPtSubTab = isMonth ? 'this_month' : 'all_time';
+
     const dataKey = currentPtSubTab;
     const section = playtimeData[dataKey] || {};
     const total   = section['_total'] || 0;
-    const label   = isMonth
-        ? (playtimeData.month_label || 'Questo mese')
-        : 'All time';
+    const label   = isAvg
+        ? 'Media giornaliera'
+        : isMonth
+            ? (playtimeData.month_label || 'Questo mese')
+            : 'All time';
 
-    const minHours = isMonth ? 0.5 : 0;
+    const minHours = (isMonth && !isAvg) ? 0.5 : 0;
     const users = Object.entries(section)
         .filter(([k, v]) => k !== '_total' && v >= minHours)
         .sort((a, b) => b[1] - a[1]);
@@ -2278,13 +2286,16 @@ function renderPlaytime() {
 
     const tabBar = `
         <div class="tab-bar" id="ptTabBar" style="margin-bottom:12px">
-            <button class="tab ${!isMonth ? 'active' : ''}" data-pt="all_time">All time</button>
+            <button class="tab ${(!isMonth && !isAvg) ? 'active' : ''}" data-pt="all_time">All time</button>
             <button class="tab ${isMonth ? 'active' : ''}" data-pt="this_month">Questo mese</button>
+            <button class="tab ${isAvg ? 'active' : ''}" data-pt="average">Media</button>
         </div>`;
 
-    const allSubTabs = !isMonth
-        ? [['all_time','Totale'],['all_time_film','Film'],['all_time_tv','Serie TV']]
-        : [['this_month','Totale'],['this_month_film','Film'],['this_month_tv','Serie TV']];
+    const allSubTabs = isAvg
+        ? [['average_raw','Media grezza'],['average_active','Giorni attivi']]
+        : !isMonth
+            ? [['all_time','Totale'],['all_time_film','Film'],['all_time_tv','Serie TV']]
+            : [['this_month','Totale'],['this_month_film','Film'],['this_month_tv','Serie TV']];
     const subTabBar = `
         <div class="tab-bar pt-subtab-bar" style="margin-bottom:16px">
             ${allSubTabs.map(([key, label]) =>
@@ -2292,10 +2303,12 @@ function renderPlaytime() {
             ).join('')}
         </div>`;
 
+    const formatValue = isAvg ? formatAvgHours : formatHours;
+
     content.innerHTML = tabBar + subTabBar + `
         <div class="pt-total">
             <span class="pt-total-label">${label} — NULLAFACENZA</span>
-            <span class="pt-total-value">${formatHours(total)}</span>
+            <span class="pt-total-value">${formatValue(total)}</span>
         </div>
         <div class="pt-users">
             ${users.length === 0
@@ -2306,7 +2319,7 @@ function renderPlaytime() {
                         <div class="pt-row-top">
                             <span class="pt-medal">${medals[i] || ''}</span>
                             <span class="pt-name">${esc(name)}</span>
-                            <span class="pt-hours">${formatHours(hours)}</span>
+                            <span class="pt-hours">${formatValue(hours)}</span>
                         </div>
                         <div class="pt-bar-track">
                             <div class="pt-bar-fill" style="width:${pct}%"></div>
@@ -2345,6 +2358,11 @@ function formatHours(h) {
         return `${totalH} h (${giorni} g ${oreRim} h)`;
     }
     return `${totalH} h`;
+}
+
+function formatAvgHours(h) {
+    if (h < 1) return `${Math.round(h * 60)} min/giorno`;
+    return `${h.toLocaleString('it-IT')} h/giorno`;
 }
 
 isAdminMode = checkAdmin();
