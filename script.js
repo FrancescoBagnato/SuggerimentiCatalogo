@@ -2270,8 +2270,8 @@ function renderPlaytime() {
     const total   = section['_total'] || 0;
     const label   = isAvg
         ? (currentPtSubTab === 'average_raw'
-            ? 'Calcolata su tutti i giorni dal primo all'ultimo utilizzo'
-            : 'Calcolata solo sui giorni di utilizzo, "quando guardi, quanto guardi?" (troppo)')
+            ? 'Calcolata su tutti i giorni dal primo utilizzo ad oggi'
+            : 'Calcolata solo sui giorni di utilizzo')
         : isMonth
             ? (playtimeData.month_label || 'Questo mese')
             : 'All time';
