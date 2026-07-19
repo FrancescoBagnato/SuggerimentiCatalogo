@@ -1,6 +1,3 @@
-// ============================================
-// CONFIGURAZIONE FIREBASE
-// ============================================
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js';
 import {
     getDatabase, ref, push, onValue,
@@ -18,9 +15,6 @@ const firebaseConfig = {
     measurementId: "G-LNZ45LZE6N"
 };
 
-// Password admin: confronto via SHA-256 — la password in chiaro non è nel codice
-// Per cambiare password: calcola il nuovo SHA-256 su https://emn178.github.io/online-tools/sha256.html
-// e aggiorna il valore su Firebase: Admin → adminHash
 async function hashPassword(str) {
     const buf  = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
     return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
@@ -35,32 +29,27 @@ const suggestedRef     = ref(db, 'suggested');
 const watchlistRef     = ref(db, 'watchlist');
 const catalogStructRef = ref(db, 'catalogStructure');
 const countersRef      = ref(db, 'counters');
-const recentRef        = ref(db, 'recentlyAdded');  // ultimi 10 titoli aggiunti
+const recentRef        = ref(db, 'recentlyAdded');
+const playtimeRef      = ref(db, 'playtime');
 
-// ============================================
-// STATO GLOBALE
-// ============================================
 let allRequests   = [];
 let allEvased     = [];
 let allSuggested  = [];
 let catalogData   = {};
 let currentTab      = 'date';
 let currentCatalogTab  = 'catalog';
-let recentItems        = [];  // ultimi 10 titoli aggiunti
-let catalogStructure   = { serietv: [], film: [] };  // dati da Firebase
-let watchlistData   = {};           // { titleKey: true } per il nick corrente
-let currentSuggSort = 'rank';   // default: Classifica
+let recentItems        = [];
+let catalogStructure   = { serietv: [], film: [] };
+let watchlistData   = {};
+let currentSuggSort = 'rank';
 let isAdminMode     = false;
 
-// ============================================
-// UTILITY
-// ============================================
 function esc(text) {
     const d = document.createElement('div');
     d.textContent = text ?? '';
     return d.innerHTML;
 }
-// Decodifica entità HTML (es. &amp; → &) per mostrare testo visibile
+
 function unesc(text) {
     const d = document.createElement('div');
     d.innerHTML = text ?? '';
@@ -68,11 +57,33 @@ function unesc(text) {
 }
 function titleToKey(title) { return title.replace(/[.#$\/\[\]]/g, '_'); }
 
+function sanitize(text, maxLen = 200) {
+    if (typeof text !== 'string') return '';
+    return text
+        .replace(/<[^>]*>/g, '')
+        .replace(/[<>"'`]/g, '')
+        .trim()
+        .slice(0, maxLen);
+}
+
+function allowedValue(val, allowed) {
+    return allowed.includes(val) ? val : '';
+}
+
+const _rateLimits = {};
+function rateLimited(key, maxCount = 3, intervalMs = 60000) {
+    const now = Date.now();
+    if (!_rateLimits[key]) _rateLimits[key] = [];
+    _rateLimits[key] = _rateLimits[key].filter(t => now - t < intervalMs);
+    if (_rateLimits[key].length >= maxCount) return true;
+    _rateLimits[key].push(now);
+    return false;
+}
+
 function checkAdmin()  { return localStorage.getItem('isAdmin') === 'true'; }
 function getNickname() { return localStorage.getItem('catalogNick') || ''; }
 function saveNickname(n) { if (n) localStorage.setItem('catalogNick', n.trim()); }
 
-// Voti consigliati: { id: score } salvati in localStorage
 function getSuggRatings()          { return JSON.parse(localStorage.getItem('suggRatings') || '{}'); }
 function saveSuggRating(id, score) { const r = getSuggRatings(); r[id] = score; localStorage.setItem('suggRatings', JSON.stringify(r)); }
 function getSuggRating(id)         { return getSuggRatings()[id] || 0; }
@@ -100,9 +111,6 @@ function showToast(msg = 'Fatto!') {
     setTimeout(() => t.remove(), 3200);
 }
 
-// ============================================
-// STELLE HELPER (rating 0.5..10, step 0.5)
-// ============================================
 function starSvgInline(type, sz) {
     const uid  = 'hc' + Math.random().toString(36).slice(2, 7);
     const pts  = '12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26';
@@ -136,9 +144,6 @@ function avgRating(users) {
     return Math.round((ratings.reduce((a, b) => a + b, 0) / ratings.length) * 2) / 2;
 }
 
-// ============================================
-// ADMIN
-// ============================================
 async function enableAdmin() {
     const pwd = prompt('Inserisci la password admin:');
     if (pwd === null) return;
@@ -171,9 +176,6 @@ function renderAdminBtn() {
     btn.classList.toggle('admin-active', isAdminMode);
 }
 
-// ============================================
-// EVADI RICHIESTA
-// ============================================
 async function evade(id, title) {
     if (!isAdminMode) return;
     if (!confirm(`Evadere "${title}"?`)) return;
@@ -186,11 +188,6 @@ async function evade(id, title) {
     } catch (e) { alert('Errore: ' + e.message); }
 }
 
-
-
-// ============================================
-// RENDER RICHIESTE
-// ============================================
 function renderRequests(list) {
     const el    = document.getElementById('requestsList');
     const badge = document.getElementById('requestCount');
@@ -225,9 +222,6 @@ function renderRequests(list) {
     }
 }
 
-// ============================================
-// RENDER EVASE
-// ============================================
 function renderEvased(list) {
     const el    = document.getElementById('requestsList');
     const badge = document.getElementById('requestCount');
@@ -262,9 +256,6 @@ function redraw() {
     else renderRequests(allRequests);
 }
 
-// ============================================
-// FIREBASE — RICHIESTE
-// ============================================
 onValue(requestsRef, snap => {
     const raw = snap.val();
     allRequests = raw ? Object.entries(raw).map(([id, val]) => ({ id, ...val })) : [];
@@ -279,19 +270,15 @@ onValue(evasedRef, snap => {
     if (window._apRenderEv) window._apRenderEv();
 });
 
-// ============================================
-// FORM SUBMIT RICHIESTA
-// ============================================
 document.getElementById('requestForm').addEventListener('submit', async function(e) {
     e.preventDefault();
     const btn = this.querySelector('.btn-submit');
     btn.disabled = true;
     btn.querySelector('.btn-submit-text').textContent = 'Invio…';
-    const titleVal     = document.getElementById('title').value.trim();
-    const typeVal      = document.getElementById('type').value;
-    const requesterVal = document.getElementById('requester').value.trim();
+    const titleVal     = sanitize(document.getElementById('title').value, 120);
+    const typeVal      = allowedValue(document.getElementById('type').value, ['Film', 'Serie TV']);
+    const requesterVal = sanitize(document.getElementById('requester').value, 30);
 
-    // Validazione campi obbligatori
     let reqError = '';
     if (!titleVal)     reqError = 'Inserisci il titolo.';
     else if (!typeVal) reqError = 'Seleziona il tipo (Film o Serie TV).';
@@ -302,20 +289,26 @@ document.getElementById('requestForm').addEventListener('submit', async function
         btn.querySelector('.btn-submit-text').textContent = 'Invia richiesta';
         return;
     }
+    if (rateLimited('request', 10, 60000)) {
+        showFormError('requestForm', 'Troppi invii. Aspetta un minuto.');
+        btn.disabled = false;
+        btn.querySelector('.btn-submit-text').textContent = 'Invia richiesta';
+        return;
+    }
 
     const payload = {
         title:     titleVal,
         type:      typeVal,
         requester: requesterVal,
-        notes:     document.getElementById('notes').value.trim(),
-        date:      new Date().toLocaleDateString('it-IT', { day:'2-digit', month:'2-digit', year:'numeric' }),
+        notes:     sanitize(document.getElementById('notes').value, 300),
+        date:      new Date().toLocaleDateString('it-IT', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }),
         timestamp: Date.now()
     };
     try {
         await push(requestsRef, payload);
         this.reset();
         showToast('Richiesta inviata con successo!');
-        // Notifica email (se EmailJS configurato)
+
         if (typeof window.sendNewRequestEmail === 'function') {
             window.sendNewRequestEmail(payload.title, payload.type, payload.requester, payload.notes);
         }
@@ -327,9 +320,6 @@ document.getElementById('requestForm').addEventListener('submit', async function
     }
 });
 
-// ============================================
-// TAB BAR RICHIESTE
-// ============================================
 document.querySelectorAll('.tab[data-sort]').forEach(tab => {
     tab.addEventListener('click', function() {
         document.querySelectorAll('.tab[data-sort]').forEach(t => t.classList.remove('active'));
@@ -339,32 +329,23 @@ document.querySelectorAll('.tab[data-sort]').forEach(tab => {
     });
 });
 
-// ============================================
-// ADMIN TOGGLE
-// ============================================
 document.getElementById('adminToggle').addEventListener('click', () => {
     if (!isAdminMode) { enableAdmin(); return; }
-    // se già admin: toggle pannello
+
     const existing = document.getElementById('adminPanelOverlay');
     if (existing) existing.remove();
     else openAdminPanel();
 });
 
-// ============================================
-// CATALOGO — POPUP
-// ============================================
 let popupCurrentTitle   = null;
 let popupSelectedStatus = null;
 let popupSelectedRating = 0;
 
-// ============================================
-// POPUP CARTELLA — applica a tutti i figli
-// ============================================
 function openFolderPopup(folder) {
     const folderTitle = folder.dataset.title;
     const subitems    = Array.from(folder.querySelectorAll('.catalog-subitem'));
     if (!subitems.length) {
-        // Nessun figlio — apri popup normale sulla cartella stessa
+
         openCatalogPopup(folderTitle);
         return;
     }
@@ -420,7 +401,6 @@ function openFolderPopup(folder) {
     overlay.classList.remove('closing');
     addSwipeToClose(overlay);
 
-    // Stato cuore watchlist cartella
     function refreshFolderWlBtn() {
         const btn = overlay.querySelector('#popupFolderWatchlist');
         if (!btn) return;
@@ -443,7 +423,6 @@ function openFolderPopup(folder) {
         finally { btn.disabled = false; }
     });
 
-    // Stelle
     function applyStarClasses(btns, activeRating) {
         btns.forEach(b => {
             const v = parseFloat(b.dataset.val);
@@ -470,7 +449,6 @@ function openFolderPopup(folder) {
         btn.addEventListener('mouseleave', () => applyStarClasses(starBtns, selectedRating));
     });
 
-    // Stato
     overlay.querySelectorAll('.status-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             const s = btn.dataset.status;
@@ -481,7 +459,6 @@ function openFolderPopup(folder) {
         });
     });
 
-    // Salva — applica a tutti i figli
     overlay.querySelector('#popupSave').addEventListener('click', async () => {
         const nick = document.getElementById('popupNick').value.trim();
         if (!nick) { alert('Inserisci il tuo nickname.'); return; }
@@ -524,9 +501,9 @@ function openFolderPopup(folder) {
 }
 
 function openCatalogPopup(title, parentTitle = null) {
-    // Per i sub-item (stagioni), usa 'Parent — Titolo' come chiave Firebase
+
     const firebaseTitle = parentTitle ? parentTitle + ' — ' + title : title;
-    popupCurrentTitle   = firebaseTitle;  // chiave univoca per Firebase
+    popupCurrentTitle   = firebaseTitle;
     popupSelectedStatus = null;
     popupSelectedRating = 0;
 
@@ -625,7 +602,6 @@ function openCatalogPopup(title, parentTitle = null) {
     overlay.classList.remove('closing');
     addSwipeToClose(overlay);
 
-    // Stelle
     function applyStarClasses(btns, activeRating) {
         btns.forEach(b => {
             const v = parseFloat(b.dataset.val);
@@ -654,7 +630,6 @@ function openCatalogPopup(title, parentTitle = null) {
         btn.addEventListener('mouseleave', () => applyStarClasses(starBtns, popupSelectedRating));
     });
 
-    // Stato
     overlay.querySelectorAll('.status-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             const s = btn.dataset.status;
@@ -669,7 +644,6 @@ function openCatalogPopup(title, parentTitle = null) {
     overlay.querySelector('#popupCancel').addEventListener('click', closePopup);
     overlay.addEventListener('click', e => { if (e.target === overlay) closePopup(); });
 
-    // Cuore watchlist
     const wlBtn = overlay.querySelector('#popupWatchlist');
     if (wlBtn) {
         wlBtn.addEventListener('click', async () => {
@@ -695,7 +669,7 @@ function addSwipeToClose(overlay) {
     let startY = 0, startX = 0, isDragging = false;
 
     box.addEventListener('touchstart', e => {
-        // Solo se il tocco inizia nella zona superiore (handle o titolo)
+
         const touch = e.touches[0];
         startY = touch.clientY;
         startX = touch.clientX;
@@ -747,15 +721,11 @@ async function saveCatalogEntry() {
     }
 }
 
-// ============================================
-// CATALOGO — AGGIORNA CARTELLA UI (media sub-item)
-// ============================================
 function updateFolderUI(folder) {
     const parent    = folder.dataset.title;
     const key       = titleToKey(parent);
     const subitems  = Array.from(folder.querySelectorAll('.catalog-subitem'));
 
-    // Calcola media voti tra tutti i sub-item
     let allRatings = [];
     let seenNicks  = new Set();
     let watchNicks = new Set();
@@ -776,13 +746,11 @@ function updateFolderUI(folder) {
         ? Math.round((allRatings.reduce((a,b)=>a+b,0)/allRatings.length)*2)/2
         : null;
 
-    // Aggiorna ci-main della cartella
     const ciMain = folder.querySelector(':scope > .ci-main');
     const nameSpan = ciMain.querySelector('.ci-name');
     const plainName = nameSpan.textContent;
     const toggle = folder.classList.contains('folder-open') ? '▼' : '▶';
 
-    // Aggiorna stelle media
     let starsEl = ciMain.querySelector('.ci-stars');
     if (!starsEl) {
         starsEl = document.createElement('span');
@@ -793,12 +761,11 @@ function updateFolderUI(folder) {
     }
     starsEl.textContent = avg ? avg.toFixed(1) + '★' : '';
 
-    // Avatar (iniziali) nella cartella — solo icone, niente colore di sfondo
     let avatarDiv = folder.querySelector(':scope > .ci-folder-avatars');
     if (!avatarDiv) {
         avatarDiv = document.createElement('div');
         avatarDiv.className = 'ci-folder-avatars';
-        // Inserisci dopo ci-main
+
         const folderList = folder.querySelector('.ci-folder-list');
         folder.insertBefore(avatarDiv, folderList);
     }
@@ -814,9 +781,6 @@ function updateFolderUI(folder) {
     }
 }
 
-// ============================================
-// CATALOGO — AGGIORNA ITEM UI
-// ============================================
 function updateCatalogItemUI(li) {
     const title     = li.dataset.title;
     const parent    = li.dataset.parent || null;
@@ -844,20 +808,14 @@ function updateCatalogItemUI(li) {
     ].join('');
 }
 
-// ============================================
-// FIREBASE — CATALOGO
-// ============================================
 onValue(catalogRef, snap => {
     catalogData = snap.val() || {};
-    // Aggiorna item normali e sub-item
+
     document.querySelectorAll('.catalog-item:not(.catalog-folder)').forEach(li => updateCatalogItemUI(li));
-    // Aggiorna cartelle (media dai sub-item)
+
     document.querySelectorAll('.catalog-folder').forEach(folder => updateFolderUI(folder));
 });
 
-// ============================================
-// FIREBASE — CONSIGLIATI
-// ============================================
 onValue(suggestedRef, snap => {
     const raw = snap.val();
     allSuggested = raw ? Object.entries(raw).map(([id, val]) => ({ id, ...val })) : [];
@@ -865,14 +823,10 @@ onValue(suggestedRef, snap => {
     if (window._apRenderSugg) window._apRenderSugg();
 });
 
-// ============================================
-// POPUP VOTANTI CONSIGLIATI
-// ============================================
 function openSuggVotersPopup(item) {
     const ratings = item.ratings ? Object.entries(item.ratings) : [];
     if (!ratings.length) return;
 
-    // Ordina per voto decrescente
     ratings.sort((a, b) => b[1] - a[1]);
 
     const overlay = document.getElementById('catalogPopupOverlay');
@@ -902,9 +856,6 @@ function openSuggVotersPopup(item) {
     overlay.addEventListener('click', e => { if (e.target === overlay) closePopup(); });
 }
 
-// ============================================
-// POPUP VOTO CONSIGLIATI
-// ============================================
 function openSuggVotePopup(id, title) {
     const overlay = document.getElementById('catalogPopupOverlay');
     const pts = '12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26';
@@ -947,7 +898,6 @@ function openSuggVotePopup(id, title) {
     overlay.classList.remove('closing');
     addSwipeToClose(overlay);
 
-    // Stelle
     function applyStars(btns, val) {
         btns.forEach(b => {
             const v = parseFloat(b.dataset.val);
@@ -988,9 +938,6 @@ function openSuggVotePopup(id, title) {
     overlay.addEventListener('click', e => { if (e.target === overlay) closePopup(); });
 }
 
-// ============================================
-// CONSIGLIATI — VOTA (score 1-10)
-// ============================================
 async function voteSuggested(id, score) {
     const myNick = getNickname();
     if (!myNick) { alert('Imposta prima il tuo Nickname!'); return; }
@@ -998,36 +945,31 @@ async function voteSuggested(id, score) {
     if (!item) return;
     if (item.nick === myNick) { alert('Non puoi votare un tuo consiglio!'); return; }
 
-    // Salva il voto sotto suggested/{id}/ratings/{nick}
     try {
         await set(ref(db, `suggested/${id}/ratings/${myNick}`), score);
         saveSuggRating(id, score);
     } catch (e) { alert('Errore: ' + e.message); }
 }
 
-// ============================================
-// CONSIGLIATI — MEDIA VOTI
-// ============================================
 function suggAvg(item) {
     const ratings = item.ratings ? Object.values(item.ratings) : [];
     if (!ratings.length) return null;
     const avg = ratings.reduce((a, b) => a + b, 0) / ratings.length;
-    // arrotonda al mezzo punto più vicino per le stelle
+
     const rounded = Math.round(avg * 2) / 2;
     return { avg: Math.round(avg * 10) / 10, rounded, count: ratings.length };
 }
 
-// Genera 10 stelline SVG inline con supporto mezze stelle (step 0.5)
 function suggStarsHtml(score, size = 11) {
     if (!score) return '';
     const pts = '12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26';
     let s = '';
     for (let i = 1; i <= 10; i++) {
         if (score >= i) {
-            // stella piena
+
             s += `<svg width="${size}" height="${size}" viewBox="0 0 24 24"><polygon points="${pts}" fill="#fbbf24" stroke="#fbbf24" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
         } else if (score >= i - 0.5) {
-            // mezza stella — clipPath
+
             const uid = 'sg' + i + Math.random().toString(36).slice(2,5);
             s += `<svg width="${size}" height="${size}" viewBox="0 0 24 24">`
                + `<defs><clipPath id="${uid}"><rect x="0" y="0" width="12" height="24"/></clipPath></defs>`
@@ -1035,16 +977,13 @@ function suggStarsHtml(score, size = 11) {
                + `<polygon points="${pts}" fill="#fbbf24" stroke="#fbbf24" stroke-width="1.5" stroke-linejoin="round" clip-path="url(#${uid})"/>`
                + `</svg>`;
         } else {
-            // stella vuota
+
             s += `<svg width="${size}" height="${size}" viewBox="0 0 24 24"><polygon points="${pts}" fill="none" stroke="#475569" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
         }
     }
     return `<span style="display:inline-flex;align-items:center;gap:1px">${s}</span>`;
 }
 
-// ============================================
-// CONSIGLIATI — RENDER
-// ============================================
 function renderSuggested(list) {
     const el    = document.getElementById('suggestedList');
     const badge = document.getElementById('suggestedCount');
@@ -1058,9 +997,8 @@ function renderSuggested(list) {
 
     const myNick = getNickname();
 
-    // ── CLASSIFICA ──
     if (currentSuggSort === 'rank') {
-        // Calcola media per ogni item, ordina: media desc → a parità timestamp asc
+
         const withAvg = list.map(item => ({ ...item, _avg: suggAvg(item) }));
         const sorted  = withAvg.sort((a, b) => {
             const aAvg = a._avg ? a._avg.avg : -1;
@@ -1068,17 +1006,17 @@ function renderSuggested(list) {
             return bAvg !== aAvg ? bAvg - aAvg : (a.timestamp || 0) - (b.timestamp || 0);
         });
         const medals     = ['🥇', '🥈', '🥉'];
-        const showMedals = sorted.length >= 1;  // medaglie sempre visibili
+        const showMedals = sorted.length >= 1;
 
         el.innerHTML = sorted.map((item, idx) => {
             const rank     = idx + 1;
             const isTop    = showMedals && rank <= 3;
             const medal    = isTop ? medals[idx] : '';
             const isOwn    = myNick && item.nick === myNick;
-            // Controlla sia localStorage che ratings Firebase (per chi ha votato al momento dell'inserimento)
+
             const myScore  = getSuggRating(item.id) || (myNick && item.ratings && item.ratings[myNick]) || 0;
             const voted    = myScore > 0;
-            // Se il voto è in Firebase ma non in localStorage, salvalo
+
             if (myNick && item.ratings && item.ratings[myNick] && !getSuggRating(item.id)) {
                 saveSuggRating(item.id, item.ratings[myNick]);
             }
@@ -1114,7 +1052,6 @@ function renderSuggested(list) {
                 </div>`;
         }).join('');
 
-    // ── A → Z ──
     } else if (currentSuggSort === 'alpha') {
         const sorted = [...list].sort((a, b) => a.title.localeCompare(b.title, 'it'));
         el.innerHTML = sorted.map(item => `
@@ -1128,7 +1065,6 @@ function renderSuggested(list) {
 
     }
 
-    // Listener contatore voti — mostra chi ha votato
     el.querySelectorAll('.sugg-votes-btn').forEach(btn => {
         btn.addEventListener('click', e => {
             e.stopPropagation();
@@ -1138,12 +1074,10 @@ function renderSuggested(list) {
         });
     });
 
-    // Listener bottone Vota — apre popup stelline
     el.querySelectorAll('.btn-sugg-vote-open').forEach(btn => {
         btn.addEventListener('click', () => openSuggVotePopup(btn.dataset.id, btn.dataset.title));
     });
 
-    // Listener stelline voto 1-10 con mezze stelle (non più usato in classifica ma mantenuto per compatibilità)
     el.querySelectorAll('.sugg-stars-input').forEach(wrap => {
         const id   = wrap.dataset.id;
         const btns = Array.from(wrap.querySelectorAll('.ssb'));
@@ -1171,7 +1105,6 @@ function renderSuggested(list) {
             btns.forEach(b => { b.innerHTML = '★'; b.style.color = '#475569'; });
         }
 
-        // Inizializza stelle come testo (★) — più leggero
         resetStars();
 
         btns.forEach((btn, i) => {
@@ -1196,7 +1129,7 @@ function renderSuggested(list) {
 
         wrap.addEventListener('mouseleave', resetStars);
     });
-    // Listener elimina
+
     el.querySelectorAll('.sugg-delete').forEach(btn => {
         btn.addEventListener('click', async () => {
             if (!confirm('Rimuovere questo consiglio?')) return;
@@ -1206,9 +1139,6 @@ function renderSuggested(list) {
     });
 }
 
-// ============================================
-// CONSIGLIATI — FORM SUBMIT
-// ============================================
 function initSuggFormStars() {
     const wrap        = document.getElementById('suggFormStars');
     const ratingInput = document.getElementById('suggFormRating');
@@ -1218,7 +1148,6 @@ function initSuggFormStars() {
     let currentRating = 0;
     let hoverRating   = 0;
 
-    // Crea i 10 bottoni stelle una volta sola
     wrap.innerHTML = '';
     const starBtns = Array.from({length: 10}, (_, i) => {
         const btn = document.createElement('button');
@@ -1294,11 +1223,10 @@ document.getElementById('suggSubmit').addEventListener('click', async () => {
     const titleEl  = document.getElementById('suggTitle');
     const nickEl   = document.getElementById('suggNick');
     const ratingEl = document.getElementById('suggFormRating');
-    const title    = titleEl.value.trim();
-    const nick     = nickEl.value.trim();
-    const rating   = parseFloat(ratingEl?.value || 0) || 0;
+    const title    = sanitize(titleEl.value, 120);
+    const nick     = sanitize(nickEl.value, 30);
+    const rating   = Math.min(10, Math.max(0, parseFloat(ratingEl?.value || 0) || 0));
 
-    // Validazione campi obbligatori
     let suggError = '';
     if (!title)  suggError = 'Inserisci il titolo del consiglio.';
     else if (!nick)   suggError = 'Inserisci il tuo nickname.';
@@ -1307,20 +1235,24 @@ document.getElementById('suggSubmit').addEventListener('click', async () => {
         showFormError('suggForm', suggError);
         return;
     }
+    if (rateLimited('suggest', 10, 60000)) {
+        showFormError('suggForm', 'Troppi invii. Aspetta un minuto.');
+        return;
+    }
     saveNickname(nick);
     const btn = document.getElementById('suggSubmit');
     btn.disabled = true;
     btn.querySelector('.btn-submit-text').textContent = 'Invio…';
     try {
         const payload = { title, nick, votes: 0, timestamp: Date.now() };
-        // Se ha messo un voto, lo aggiungiamo subito come suo rating
+
         if (rating > 0) {
             if (!payload.ratings) payload.ratings = {};
             payload.ratings[nick] = rating;
         }
         await push(suggestedRef, payload);
         titleEl.value = '';
-        // Reset stelle
+
         if (ratingEl) ratingEl.value = 0;
         initSuggFormStars();
     } catch (e) { alert('Errore: ' + e.message); }
@@ -1330,9 +1262,6 @@ document.getElementById('suggSubmit').addEventListener('click', async () => {
     }
 });
 
-// ============================================
-// CONSIGLIATI — TAB SORT
-// ============================================
 document.querySelectorAll('[data-sugg-sort]').forEach(tab => {
     tab.addEventListener('click', function () {
         document.querySelectorAll('[data-sugg-sort]').forEach(t => t.classList.remove('active'));
@@ -1342,17 +1271,10 @@ document.querySelectorAll('[data-sugg-sort]').forEach(tab => {
     });
 });
 
-// ============================================
-// CATALOGO — ACCORDION + RICERCA + CLICK POPUP
-// ============================================
 function initCatalog() {
-    // Ora vuota — il catalogo è renderizzato da renderCatalogFromFirebase()
-    // Lasciata per compatibilità con eventuali chiamate residue
+
 }
 
-// ============================================
-// CATALOGO — RENDER DA FIREBASE
-// ============================================
 function renderCatalogFromFirebase() {
     const container = document.getElementById('catalogContainer');
     if (!container) return;
@@ -1369,19 +1291,17 @@ function renderCatalogFromFirebase() {
                         + buildCategoryHTML('cat-film',    'Film',     'dot-film','count-film',    'folders-film',    'episodes-film',    film)
                         + '<div id="catalogNoResults" class="catalog-empty" style="display:none">Nessun titolo trovato.</div>';
 
-    // Aggancia eventi
     attachCatalogEvents();
 
-    // Aggiorna contatori
     updateAllCategoryCounters();
 }
 
 function buildCategoryHTML(catId, catName, dotClass, countId, foldersId, episodesId, items) {
-    // Ordina items alfabeticamente per titolo (cartelle e singoli misti)
+
     const sortedItems = [...items].sort((a, b) => a.title.localeCompare(b.title, 'it', {sensitivity:'base'}));
     const listHTML = sortedItems.map(item => {
-        const safe    = esc(item.title);      // per attributi HTML
-        const display = item.title;            // testo visibile raw
+        const safe    = esc(item.title);
+        const display = item.title;
         if (item.type === 'folder') {
             const subsHTML = (item.children || []).map(sub => {
                 const safeSub    = esc(sub);
@@ -1415,22 +1335,19 @@ function buildCategoryHTML(catId, catName, dotClass, countId, foldersId, episode
 }
 
 function attachCatalogEvents() {
-    // Accordion — gestito dalla delegazione sopra
 
-    // Cartelle — tutte chiuse di default
     document.querySelectorAll('.catalog-folder').forEach(folder => {
         folder.classList.remove('folder-open');
     });
 
-    // Delegazione eventi sul container — funziona anche durante la ricerca
     const catalogContainer = document.getElementById('catalogContainer');
     if (catalogContainer) {
-        // Rimuovi vecchi listener clonando
+
         const newContainer = catalogContainer.cloneNode(true);
         catalogContainer.parentNode.replaceChild(newContainer, catalogContainer);
 
         newContainer.addEventListener('click', e => {
-            // Toggle ▶ espandi/chiudi
+
             const toggle = e.target.closest('.ci-folder-toggle');
             if (toggle) {
                 e.stopPropagation();
@@ -1442,7 +1359,6 @@ function attachCatalogEvents() {
                 return;
             }
 
-            // Click sul nome cartella → popup
             const nameSpan = e.target.closest('.catalog-folder > .ci-main .ci-name');
             if (nameSpan) {
                 e.stopPropagation();
@@ -1451,7 +1367,6 @@ function attachCatalogEvents() {
                 return;
             }
 
-            // Click su sub-item
             const subitem = e.target.closest('.catalog-subitem');
             if (subitem) {
                 e.stopPropagation();
@@ -1459,14 +1374,12 @@ function attachCatalogEvents() {
                 return;
             }
 
-            // Click su item singolo
             const single = e.target.closest('.catalog-item:not(.catalog-folder):not(.catalog-subitem)');
             if (single) {
                 openCatalogPopup(single.dataset.title);
             }
         });
 
-        // Ri-aggancia accordion categorie sul nuovo container
         newContainer.querySelectorAll('.catalog-cat-btn').forEach(btn => {
             btn.setAttribute('aria-expanded', 'false');
             btn.addEventListener('click', function() {
@@ -1480,18 +1393,14 @@ function attachCatalogEvents() {
         });
     }
 
-    // Click su item e sub-item — gestiti dalla delegazione sopra
-
-    // Salva plainName per ricerca
     document.querySelectorAll('.catalog-item').forEach(li => {
         li.dataset.plainName = li.querySelector('.ci-name')?.textContent || '';
     });
 
-    // Ricerca
     const searchInput = document.getElementById('catalogSearch');
     const noResults   = document.getElementById('catalogNoResults');
     if (searchInput) {
-        // Rimuovi vecchi listener clonando
+
         const newSearch = searchInput.cloneNode(true);
         searchInput.parentNode.replaceChild(newSearch, searchInput);
         newSearch.addEventListener('input', function() {
@@ -1522,7 +1431,7 @@ function attachCatalogEvents() {
                         const idx2 = plain.toLowerCase().indexOf(q);
                         nameEl.innerHTML =
                             esc(plain.slice(0,idx2)) + '<mark>' + esc(plain.slice(idx2, idx2+q.length)) + '</mark>' + esc(plain.slice(idx2+q.length));
-                        // Se è un sub-item, apri la cartella padre
+
                         if (li.classList.contains('catalog-subitem')) {
                             const folder = li.closest('.catalog-folder');
                             if (folder) folder.classList.add('folder-open');
@@ -1531,7 +1440,7 @@ function attachCatalogEvents() {
                         nameEl.innerHTML = esc(plain);
                     }
                 });
-                // Apri anche le cartelle che hanno sub-item visibili
+
                 cat.querySelectorAll('.catalog-folder').forEach(folder => {
                     const hasVisible = Array.from(folder.querySelectorAll('.catalog-subitem'))
                         .some(s => !s.classList.contains('hidden'));
@@ -1548,11 +1457,9 @@ function attachCatalogEvents() {
         });
     }
 
-    // Aggiorna voti/stati dal catalogData Firebase
     document.querySelectorAll('.catalog-item:not(.catalog-folder)').forEach(li => updateCatalogItemUI(li));
     document.querySelectorAll('.catalog-folder').forEach(folder => updateFolderUI(folder));
 
-    // Tap su avatar → mostra nome completo (tooltip mobile)
     initAvatarTooltips(document.getElementById('catalogContainer'));
 }
 
@@ -1569,7 +1476,7 @@ function initAvatarTooltips(container) {
         document.querySelectorAll('.ci-avatar.tooltip-visible').forEach(a => a.classList.remove('tooltip-visible'));
         if (!isVisible) {
             avatar.classList.add('tooltip-visible');
-            // Controlla se il tooltip esce dallo schermo a destra
+
             const rect = avatar.getBoundingClientRect();
             const tooltipEstimatedWidth = 80;
             if (rect.left + tooltipEstimatedWidth > window.innerWidth - 8) {
@@ -1600,10 +1507,6 @@ function updateAllCategoryCounters() {
     });
 }
 
-// ============================================
-// FIREBASE — STRUTTURA CATALOGO
-// ============================================
-// Firebase salva gli array come oggetti {0:{...},1:{...}} — convertiamo
 function fbToArray(val) {
     if (!val) return [];
     if (Array.isArray(val)) return val;
@@ -1622,7 +1525,7 @@ onValue(catalogStructRef, snap => {
         catalogStructure.film    = fbToArray(data.film);
                 }
     renderCatalogFromFirebase();
-    // Ricarica counters Firebase dopo render
+
     const countersSnap = get(ref(db, 'counters'));
     countersSnap.then(s => {
         if (!s.exists()) return;
@@ -1644,14 +1547,10 @@ onValue(catalogStructRef, snap => {
     });
 });
 
-// ============================================
-// PANNELLO ADMIN
-// ============================================
 function openAdminPanel() {
     const existing = document.getElementById('adminPanelOverlay');
     if (existing) { existing.remove(); return; }
 
-    // Raccogli titoli catalogo dal DOM
     const catalogItems = Array.from(document.querySelectorAll('.catalog-item')).map(li => ({
         title: li.dataset.title,
         category: li.closest('.catalog-category')?.querySelector('.cat-name')?.textContent || ''
@@ -1790,11 +1689,9 @@ function openAdminPanel() {
 
     document.body.appendChild(overlay);
 
-    // Chiudi
     overlay.querySelector('#adminPanelClose').addEventListener('click', () => overlay.remove());
     overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
 
-    // Tab switching
     overlay.querySelectorAll('.admin-tab').forEach(tab => {
         tab.addEventListener('click', function() {
             overlay.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
@@ -1804,7 +1701,6 @@ function openAdminPanel() {
         });
     });
 
-    // ── Popola RICHIESTE ──
     function renderApRequests() {
         const el = overlay.querySelector('#ap-req-list');
         if (!allRequests.length) { el.innerHTML = '<div class="ap-empty">Nessuna richiesta.</div>'; return; }
@@ -1838,7 +1734,6 @@ function openAdminPanel() {
         });
     }
 
-    // ── Popola EVASE ──
     function renderApEvased() {
         const el = overlay.querySelector('#ap-ev-list');
         if (!allEvased.length) { el.innerHTML = '<div class="ap-empty">Nessuna richiesta evasa.</div>'; return; }
@@ -1862,7 +1757,6 @@ function openAdminPanel() {
         });
     }
 
-    // ── Popola CONSIGLIATI ──
     function renderApSugg() {
         const el = overlay.querySelector('#ap-sugg-list');
         if (!allSuggested.length) { el.innerHTML = '<div class="ap-empty">Nessun consiglio.</div>'; return; }
@@ -1886,7 +1780,6 @@ function openAdminPanel() {
         });
     }
 
-    // ── Popola CATALOGO (da catalogStructure Firebase) ──
     function getFilteredItems(filterCat, searchQ) {
         let items = [];
         if (!filterCat || filterCat === 'cat-serietv') {
@@ -1933,7 +1826,6 @@ function openAdminPanel() {
             </div>`;
         }).join('');
 
-        // Elimina titolo o cartella
         el.querySelectorAll('.ap-btn-del').forEach(btn => {
             btn.addEventListener('click', async () => {
                 const title    = btn.dataset.title;
@@ -1946,7 +1838,6 @@ function openAdminPanel() {
             });
         });
 
-        // Elimina sub-item
         el.querySelectorAll('.ap-subitem-del').forEach(btn => {
             btn.addEventListener('click', async e => {
                 e.stopPropagation();
@@ -1978,7 +1869,6 @@ function openAdminPanel() {
 
     function updateCategoryCounters() { updateAllCategoryCounters(); }
 
-    // Aggiungi titolo singolo o cartella
     overlay.querySelector('#apAddTitle').addEventListener('click', async () => {
         const titleInput = overlay.querySelector('#apNewTitle');
         const catSel     = overlay.querySelector('#apNewCat');
@@ -2004,7 +1894,6 @@ function openAdminPanel() {
         renderApCatalog();
     });
 
-    // Aggiungi sub-item a cartella
     overlay.querySelector('#apAddSub').addEventListener('click', async () => {
         const subInput    = overlay.querySelector('#apSubTitle');
         const folderSel   = overlay.querySelector('#apSubFolder');
@@ -2032,7 +1921,6 @@ function openAdminPanel() {
     renderApCatalog();
     renderApRecent();
 
-    // ── Novità ──
     function renderApRecent() {
         const el = overlay.querySelector('#ap-recent-list');
         if (!el) return;
@@ -2113,7 +2001,6 @@ function openAdminPanel() {
         } catch(e) { alert('Errore: ' + e.message); }
     });
 
-    // ── Contatori — precompila con valori da Firebase ──
     const counterKeys = ['folders-serietv','episodes-serietv','folders-film','episodes-film'];
     counterKeys.forEach(async key => {
         try {
@@ -2135,7 +2022,6 @@ function openAdminPanel() {
         } catch(e) {}
     });
 
-    // Salva contatori su Firebase
     overlay.querySelectorAll('.ap-counter-save').forEach(btn => {
         btn.addEventListener('click', async () => {
             const input  = overlay.querySelector('#' + btn.dataset.input);
@@ -2143,7 +2029,7 @@ function openAdminPanel() {
             if (!input || !target) return;
             const val = input.value.trim();
             if (!val) return;
-            // Salva solo il numero su Firebase, il suffisso è fisso nel codice
+
             const numOnly = val.replace(/[^0-9]/g, '');
             const sfx = { 'folders-serietv':' cart.','episodes-serietv':' ep.','folders-film':' cart.','episodes-film':' titoli' };
             target.textContent = numOnly + (sfx[btn.dataset.key] || '');
@@ -2152,7 +2038,6 @@ function openAdminPanel() {
         });
     });
 
-    // Filtri categoria catalogo
     overlay.querySelectorAll('.ap-filter-btn').forEach(btn => {
         btn.addEventListener('click', function() {
             overlay.querySelectorAll('.ap-filter-btn').forEach(b => b.classList.remove('active'));
@@ -2163,7 +2048,6 @@ function openAdminPanel() {
         });
     });
 
-    // Ricerca nel catalogo admin
     const apCatSearch = overlay.querySelector('#apCatSearch');
     if (apCatSearch) {
         apCatSearch.addEventListener('input', function() {
@@ -2173,15 +2057,10 @@ function openAdminPanel() {
         });
     }
 
-    // Aggiorna il pannello quando cambiano i dati Firebase
     window._apRenderReq  = renderApRequests;
     window._apRenderEv   = renderApEvased;
     window._apRenderSugg = renderApSugg;
 }
-
-// ============================================
-// CONTATORI — carica da Firebase all'avvio
-// ============================================
 
 onValue(countersRef, snap => {
     const data = snap.val() || {};
@@ -2200,17 +2079,14 @@ onValue(countersRef, snap => {
     Object.entries(map).forEach(([key, elId]) => {
         const el = document.getElementById(elId);
         if (el && data[key]) {
-            // Salva solo il numero, aggiungi suffisso fisso
+
             const num = String(data[key]).replace(/[^0-9]/g, '');
             el.textContent = num + (suffixes[key] || '');
         }
     });
 });
 
-// ============================================
-// WATCHLIST
-// ============================================
-let watchlistUnsubscribe = null;  // listener Firebase attivo
+let watchlistUnsubscribe = null;
 
 function isInWatchlist(firebaseTitle) {
     return !!watchlistData[titleToKey(firebaseTitle)];
@@ -2231,7 +2107,7 @@ async function toggleWatchlist(firebaseTitle, displayTitle) {
 }
 
 function loadWatchlist(nick) {
-    // Rimuovi listener precedente
+
     if (watchlistUnsubscribe) { watchlistUnsubscribe(); watchlistUnsubscribe = null; }
     if (!nick) return;
 
@@ -2239,7 +2115,7 @@ function loadWatchlist(nick) {
     watchlistUnsubscribe = onValue(nickRef, snap => {
         watchlistData = snap.val() || {};
         renderWatchlist(nick);
-        // Aggiorna cuori visibili nel catalogo
+
         document.querySelectorAll('.ci-heart').forEach(h => {
             const ft = h.dataset.firebaseTitle;
             h.textContent = isInWatchlist(ft) ? '♥' : '♡';
@@ -2280,40 +2156,38 @@ function renderWatchlist(nick) {
     });
 }
 
-// Tab bar catalogo / watchlist
 document.querySelectorAll('.catalog-tab').forEach(tab => {
     tab.addEventListener('click', function() {
         document.querySelectorAll('.catalog-tab').forEach(t => t.classList.remove('active'));
         this.classList.add('active');
         currentCatalogTab = this.dataset.ctab;
-        const catEl  = document.getElementById('catalogContainer');
-        const catSearch = document.querySelector('.catalog-search-wrap');
-        const wlEl   = document.getElementById('watchlistContainer');
+        const catView  = document.getElementById('catalogView');
+        const wlEl     = document.getElementById('watchlistContainer');
         const recentEl = document.getElementById('recentContainer');
+        const ptEl     = document.getElementById('playtimeContainer');
+
+        if (catView)  catView.style.display  = 'none';
+        if (wlEl)     wlEl.style.display     = 'none';
+        if (recentEl) recentEl.style.display = 'none';
+        if (ptEl)     ptEl.style.display     = 'none';
+
         if (currentCatalogTab === 'watchlist') {
-            catEl.style.display    = 'none';
-            if (catSearch) catSearch.style.display = 'none';
-            wlEl.style.display     = 'block';
-            if (recentEl) recentEl.style.display = 'none';
+            if (wlEl) wlEl.style.display = 'block';
             const inp = document.getElementById('watchlistNickInput');
             const nick = getNickname();
             if (nick && inp) { inp.value = nick; loadWatchlist(nick); }
         } else if (currentCatalogTab === 'recent') {
-            catEl.style.display    = 'none';
-            if (catSearch) catSearch.style.display = 'none';
-            wlEl.style.display     = 'none';
             if (recentEl) recentEl.style.display = 'block';
             renderRecent();
+        } else if (currentCatalogTab === 'playtime') {
+            if (ptEl) ptEl.style.display = 'block';
+            renderPlaytime();
         } else {
-            catEl.style.display    = 'block';
-            if (catSearch) catSearch.style.display = '';
-            wlEl.style.display     = 'none';
-            if (recentEl) recentEl.style.display = 'none';
+            if (catView) catView.style.display = 'block';
         }
     });
 });
 
-// Bottone "Carica"
 document.getElementById('watchlistNickBtn')?.addEventListener('click', () => {
     const nick = document.getElementById('watchlistNickInput')?.value.trim();
     if (!nick) return;
@@ -2321,9 +2195,6 @@ document.getElementById('watchlistNickBtn')?.addEventListener('click', () => {
     loadWatchlist(nick);
 });
 
-// ============================================
-// NOVITÀ — FIREBASE LISTENER
-// ============================================
 onValue(recentRef, snap => {
     const raw = snap.val();
     recentItems = raw
@@ -2333,14 +2204,11 @@ onValue(recentRef, snap => {
             .slice(0,10)
         : [];
     if (currentCatalogTab === 'recent') renderRecent();
-    // Aggiorna pannello admin se aperto
+
     const apList = document.querySelector('#ap-recent-list');
     if (apList && typeof renderApRecent === 'function') renderApRecent();
 });
 
-// ============================================
-// NOVITÀ — RENDER
-// ============================================
 const TYPE_LABELS = {
     'film-singolo':   { icon: '', label: 'Film singolo' },
     'film-cartella':  { icon: '', label: 'Raccolta Film' },
@@ -2369,9 +2237,134 @@ function renderRecent() {
     }).join('');
 }
 
-// ============================================
-// INIT
-// ============================================
+let playtimeData  = null;
+let currentPtTab  = 'all_time';
+
+onValue(playtimeRef, (snap) => {
+    playtimeData = snap.val();
+    if (currentCatalogTab === 'playtime') renderPlaytime();
+});
+
+let currentPtSubTab = 'all_time';
+
+function renderPlaytime() {
+    const content = document.getElementById('playtimeContent');
+    const updated = document.getElementById('playtimeUpdated');
+    if (!content) return;
+
+    if (!playtimeData) {
+        content.innerHTML = '<div class="catalog-empty">Nessun dato disponibile ancora.</div>';
+        return;
+    }
+
+    const isMonth  = currentPtTab === 'this_month';
+    const isAvg    = currentPtTab === 'average';
+
+    if (isMonth && !currentPtSubTab.startsWith('this_month')) currentPtSubTab = 'this_month';
+    if (!isMonth && !isAvg && currentPtSubTab.startsWith('this_month')) currentPtSubTab = 'all_time';
+    if (isAvg && !currentPtSubTab.startsWith('average')) currentPtSubTab = 'average_raw';
+    if (!isAvg && currentPtSubTab.startsWith('average')) currentPtSubTab = isMonth ? 'this_month' : 'all_time';
+
+    const dataKey = currentPtSubTab;
+    const section = playtimeData[dataKey] || {};
+    const total   = section['_total'] || 0;
+    const label   = isAvg
+        ? (currentPtSubTab === 'average_raw'
+            ? 'Calcolata su tutti i giorni dal primo utilizzo ad oggi'
+            : 'Calcolata solo sui giorni di utilizzo')
+        : isMonth
+            ? (playtimeData.month_label || 'Questo mese')
+            : 'All time';
+
+    const minHours = (isMonth && !isAvg) ? 0.5 : 0;
+    const users = Object.entries(section)
+        .filter(([k, v]) => k !== '_total' && v >= minHours)
+        .sort((a, b) => b[1] - a[1]);
+
+    const maxHours = users.length ? users[0][1] : 1;
+    const medals = ['🥇', '🥈', '🥉'];
+
+    const tabBar = `
+        <div class="tab-bar" id="ptTabBar" style="margin-bottom:12px">
+            <button class="tab ${(!isMonth && !isAvg) ? 'active' : ''}" data-pt="all_time">All time</button>
+            <button class="tab ${isMonth ? 'active' : ''}" data-pt="this_month">Questo mese</button>
+            <button class="tab ${isAvg ? 'active' : ''}" data-pt="average">Media</button>
+        </div>`;
+
+    const allSubTabs = isAvg
+        ? [['average_raw','Media Grezza'],['average_active','Media Attiva']]
+        : !isMonth
+            ? [['all_time','Totale'],['all_time_film','Film'],['all_time_tv','Serie TV']]
+            : [['this_month','Totale'],['this_month_film','Film'],['this_month_tv','Serie TV']];
+    const subTabBar = `
+        <div class="tab-bar pt-subtab-bar" style="margin-bottom:16px">
+            ${allSubTabs.map(([key, label]) =>
+                `<button class="tab ${currentPtSubTab === key ? 'active' : ''}" data-ptsub="${key}">${label}</button>`
+            ).join('')}
+        </div>`;
+
+    const formatValue = isAvg ? formatAvgHours : formatHours;
+
+    content.innerHTML = tabBar + subTabBar + `
+        <div class="pt-total">
+            <span class="pt-total-label">${isAvg ? label : label + ' — NULLAFACENZA'}</span>
+            <span class="pt-total-value">${formatValue(total)}</span>
+        </div>
+        <div class="pt-users">
+            ${users.length === 0
+                ? '<div class="catalog-empty">Nessuna visione registrata.</div>'
+                : users.map(([name, hours], i) => {
+                    const pct = Math.round((hours / maxHours) * 100);
+                    return `<div class="pt-row">
+                        <div class="pt-row-top">
+                            <span class="pt-medal">${medals[i] || ''}</span>
+                            <span class="pt-name">${esc(name)}</span>
+                            <span class="pt-hours">${formatValue(hours)}</span>
+                        </div>
+                        <div class="pt-bar-track">
+                            <div class="pt-bar-fill" style="width:${pct}%"></div>
+                        </div>
+                    </div>`;
+                }).join('')
+            }
+        </div>`;
+
+    content.querySelectorAll('[data-pt]').forEach(btn => {
+        btn.addEventListener('click', function() {
+            currentPtTab = this.dataset.pt;
+            renderPlaytime();
+        });
+    });
+
+    content.querySelectorAll('[data-ptsub]').forEach(btn => {
+        btn.addEventListener('click', function() {
+            currentPtSubTab = this.dataset.ptsub;
+            renderPlaytime();
+        });
+    });
+
+    if (updated && playtimeData.updated_at) {
+        const dayOnly = playtimeData.updated_at.split(' ')[0];
+        updated.textContent = `Aggiornato il ${dayOnly}`;
+    }
+}
+
+function formatHours(h) {
+    if (h < 1) return `${Math.round(h * 60)} min`;
+    const totalH = Math.floor(h);
+    const giorni = Math.floor(totalH / 24);
+    const oreRim = totalH % 24;
+    if (giorni > 0) {
+        return `${totalH} h (${giorni} g ${oreRim} h)`;
+    }
+    return `${totalH} h`;
+}
+
+function formatAvgHours(h) {
+    if (h < 1) return `${Math.round(h * 60)} min/giorno`;
+    return `${h.toLocaleString('it-IT')} h/giorno`;
+}
+
 isAdminMode = checkAdmin();
 renderAdminBtn();
 initCatalog();
@@ -2383,5 +2376,4 @@ if (savedNick) {
     loadWatchlist(savedNick);
 }
 
-// Inizializza stelle nel form consigliati
 initSuggFormStars();
