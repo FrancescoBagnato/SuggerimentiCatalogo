@@ -301,7 +301,7 @@ document.getElementById('requestForm').addEventListener('submit', async function
         type:      typeVal,
         requester: requesterVal,
         notes:     sanitize(document.getElementById('notes').value, 300),
-        date:      new Date().toLocaleDateString('it-IT', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }),
+        date:      new Date().toLocaleDateString('it-IT', { day:'2-digit', month:'2-digit', year:'numeric' }),
         timestamp: Date.now()
     };
     try {
