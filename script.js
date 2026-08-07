@@ -301,7 +301,7 @@ document.getElementById('requestForm').addEventListener('submit', async function
         type:      typeVal,
         requester: requesterVal,
         notes:     sanitize(document.getElementById('notes').value, 300),
-        date:      new Date().toLocaleDateString('it-IT', { day:'2-digit', month:'2-digit', year:'numeric' }),
+        date:      new Date().toLocaleDateString('it-IT', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }),
         timestamp: Date.now()
     };
     try {
@@ -2362,7 +2362,10 @@ function formatHours(h) {
 
 function formatAvgHours(h) {
     if (h < 1) return `${Math.round(h * 60)} min/giorno`;
-    return `${h.toLocaleString('it-IT')} h/giorno`;
+    const wholeH = Math.floor(h);
+    const mins   = Math.round((h - wholeH) * 60);
+    if (mins === 0) return `${wholeH} h/giorno`;
+    return `${wholeH} h ${mins} min/giorno`;
 }
 
 isAdminMode = checkAdmin();
