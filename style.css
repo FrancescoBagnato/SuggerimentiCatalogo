@@ -1341,3 +1341,25 @@ input[type="search"]::placeholder { color: rgba(255,255,255,.35); }
     color: var(--text-2, #6b7a99);
     opacity: 0.7;
 }
+.btn-download {
+    margin-left: 8px;
+    font-family: var(--font-sans);
+    font-size: 12.5px;
+    font-weight: 600;
+    padding: 7px 15px;
+    border-radius: var(--r-pill);
+    border: 1.5px solid rgba(79,142,247,.45);
+    background: rgba(79,142,247,.15);
+    color: #8ab4ff;
+    cursor: pointer;
+    transition: background .15s, opacity .15s;
+}
+
+.btn-download:hover {
+    background: rgba(79,142,247,.28);
+}
+
+.btn-download:disabled {
+    opacity: .55;
+    cursor: not-allowed;
+}
