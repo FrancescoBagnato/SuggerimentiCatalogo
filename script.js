@@ -176,23 +176,6 @@ function renderAdminBtn() {
     btn.classList.toggle('admin-active', isAdminMode);
 }
 
-async function requestDownload(id, title, type) {
-    if (!isAdminMode) return;
-
-    if (!confirm(`Avviare il download di "${title}"?`)) return;
-
-    try {
-        await update(ref(db, `requests/${id}`), {
-            downloadRequested: true,
-            downloadRequestedAt: Date.now()
-        });
-
-        alert(`Richiesta preparata per il download:\n${title} (${type})`);
-    } catch (e) {
-        alert('Errore: ' + e.message);
-    }
-}
-
 async function evade(id, title) {
     if (!isAdminMode) return;
     if (!confirm(`Evadere "${title}"?`)) return;
@@ -227,42 +210,16 @@ function renderRequests(list) {
             </div>
             ${req.notes ? `<div class="req-notes">${esc(req.notes)}</div>` : ''}
             ${isAdminMode ? `
-<div class="req-footer">
-    <button
-        class="btn-download"
-        data-id="${req.id}"
-        data-title="${esc(req.title)}"
-        data-type="${esc(req.type)}"
-        ${req.downloadRequested ? 'disabled' : ''}>
-        ${req.downloadRequested ? 'Download richiesto' : 'Avvia download'}
-    </button>
-
-    <button
-        class="btn-evade"
-        data-id="${req.id}"
-        data-title="${esc(req.title)}">
-        Evadi ✓
-    </button>
-</div>` : ''}
+            <div class="req-footer">
+                <button class="btn-evade" data-id="${req.id}" data-title="${esc(req.title)}">Evadi ✓</button>
+            </div>` : ''}
         </div>
     `).join('');
     if (isAdminMode) {
-    el.querySelectorAll('.btn-download').forEach(b =>
-        b.addEventListener('click', () =>
-            requestDownload(
-                b.dataset.id,
-                b.dataset.title,
-                b.dataset.type
-            )
-        )
-    );
-
-    el.querySelectorAll('.btn-evade').forEach(b =>
-        b.addEventListener('click', () =>
-            evade(b.dataset.id, b.dataset.title)
-        )
-    );
-}
+        el.querySelectorAll('.btn-evade').forEach(b =>
+            b.addEventListener('click', () => evade(b.dataset.id, b.dataset.title))
+        );
+    }
 }
 
 function renderEvased(list) {
