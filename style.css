@@ -1426,3 +1426,21 @@ input[type="search"]::placeholder { color: rgba(255,255,255,.35); }
     gap: 10px;
     margin-top: 24px;
 }
+
+/* Fix toggle cartelle annidate */
+.catalog-folder > .ci-folder-list {
+    display: block;
+    max-height: 0;
+    overflow: hidden;
+}
+.catalog-folder.folder-open > .ci-folder-list {
+    display: block !important;
+    max-height: none !important;
+    overflow: visible !important;
+}
+.catalog-folder > .ci-main .ci-folder-toggle {
+    cursor: pointer;
+    user-select: none;
+    min-width: 28px;
+    text-align: center;
+}
