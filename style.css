@@ -1341,3 +1341,16 @@ input[type="search"]::placeholder { color: rgba(255,255,255,.35); }
     color: var(--text-2, #6b7a99);
     opacity: 0.7;
 }
+
+/* Le cartelle devono rimanere espandibili anche durante la ricerca. */
+.catalog-folder.folder-open > .ci-folder-list {
+    display: block !important;
+    visibility: visible !important;
+    max-height: none !important;
+    overflow: visible !important;
+}
+
+.catalog-folder.folder-open > .ci-folder-list > .catalog-subitem {
+    display: list-item !important;
+    visibility: visible !important;
+}
