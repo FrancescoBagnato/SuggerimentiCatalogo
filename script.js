@@ -723,63 +723,78 @@ async function saveCatalogEntry() {
 }
 
 function updateFolderUI(folder) {
-    const parent    = folder.dataset.title;
-    const key       = titleToKey(parent);
-    const subitems  = Array.from(folder.querySelectorAll('.catalog-subitem'));
+    const parent = folder.dataset.title;
+    const subitems = Array.from(
+        folder.querySelectorAll(':scope > .ci-folder-list > .catalog-subitem')
+    );
 
-    let allRatings = [];
-    let seenNicks  = new Set();
-    let watchNicks = new Set();
+    const usersByNick = {};
 
     subitems.forEach(li => {
-        const subFbTitle = parent + ' — ' + li.dataset.title;
-        const subKey     = titleToKey(subFbTitle);
-        const subData    = catalogData[subKey] || {};
-        const users   = subData.users || {};
-        Object.entries(users).forEach(([nick, u]) => {
-            if (u.rating) allRatings.push(u.rating);
-            if (u.status === 'seen')     seenNicks.add(nick);
-            if (u.status === 'watching') watchNicks.add(nick);
+        const subTitle = li.dataset.title;
+        const firebaseTitle = parent + ' — ' + subTitle;
+        const key = titleToKey(firebaseTitle);
+        const users = (catalogData[key] || {}).users || {};
+
+        Object.entries(users).forEach(([nick, user]) => {
+            if (!usersByNick[nick]) usersByNick[nick] = [];
+            if (user.status === 'seen' || user.status === 'watching') {
+                usersByNick[nick].push(user.status);
+            }
         });
     });
 
-    const avg = allRatings.length
-        ? Math.round((allRatings.reduce((a,b)=>a+b,0)/allRatings.length)*2)/2
-        : null;
+    const seenNicks = [];
+    const watchNicks = [];
+
+    Object.entries(usersByNick).forEach(([nick, statuses]) => {
+        if (!statuses.length) return;
+
+        // Verde solo se tutti i figli risultano visti.
+        if (
+            statuses.length === subitems.length &&
+            statuses.every(status => status === 'seen')
+        ) {
+            seenNicks.push(nick);
+        } else {
+            // Se almeno un figlio ha uno stato, ma non sono tutti visti:
+            // un solo ticker giallo.
+            watchNicks.push(nick);
+        }
+    });
 
     const ciMain = folder.querySelector(':scope > .ci-main');
-    const nameSpan = ciMain.querySelector('.ci-name');
-    const plainName = nameSpan.textContent;
+    if (!ciMain) return;
+
     const toggle = folder.classList.contains('folder-open') ? '▼' : '▶';
 
-    let starsEl = ciMain.querySelector('.ci-stars');
-    if (!starsEl) {
-        starsEl = document.createElement('span');
-        starsEl.className = 'ci-stars';
-        const toggleEl = ciMain.querySelector('.ci-folder-toggle');
-        if (toggleEl) ciMain.insertBefore(starsEl, toggleEl);
-        else ciMain.appendChild(starsEl);
+    const toggleEl = ciMain.querySelector('.ci-folder-toggle');
+    if (toggleEl) {
+        toggleEl.textContent = toggle;
     }
-    starsEl.textContent = avg ? avg.toFixed(1) + '★' : '';
 
     let avatarDiv = folder.querySelector(':scope > .ci-folder-avatars');
+
     if (!avatarDiv) {
         avatarDiv = document.createElement('div');
         avatarDiv.className = 'ci-folder-avatars';
 
-        const folderList = folder.querySelector('.ci-folder-list');
+        const folderList = folder.querySelector(':scope > .ci-folder-list');
         folder.insertBefore(avatarDiv, folderList);
     }
-    const allSeen    = [...seenNicks];
-    const allWatch   = [...watchNicks];
-    if (allSeen.length || allWatch.length) {
-        avatarDiv.innerHTML = [
-            ...allSeen.map(n  => `<div class="ci-avatar seen"    title="${esc(n)} — Visto"    data-tooltip="${esc(n)}">${esc(n[0].toUpperCase())}</div>`),
-            ...allWatch.map(n => `<div class="ci-avatar watching" title="${esc(n)} — In corso" data-tooltip="${esc(n)}">${esc(n[0].toUpperCase())}</div>`)
-        ].join('');
-    } else {
-        avatarDiv.innerHTML = '';
-    }
+
+    avatarDiv.innerHTML = [
+        ...seenNicks.map(nick =>
+            `<div class="ci-avatar seen"
+                title="${esc(nick)} — Visto"
+                data-tooltip="${esc(nick)}">${esc(nick[0].toUpperCase())}</div>`
+        ),
+        ...watchNicks.map(nick =>
+            `<div class="ci-avatar watching"
+                title="${esc(nick)} — In corso"
+                data-tooltip="${esc(nick)}">${esc(nick[0].toUpperCase())}</div>`
+        )
+    ].join('');
 }
 
 function updateCatalogItemUI(li) {
