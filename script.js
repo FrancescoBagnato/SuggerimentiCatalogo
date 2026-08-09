@@ -1413,6 +1413,12 @@ function attachCatalogEvents() {
                 });
                 document.querySelectorAll('.catalog-panel').forEach(p => p.classList.remove('open'));
                 document.querySelectorAll('.catalog-cat-btn').forEach(b => b.setAttribute('aria-expanded','false'));
+
+                document.querySelectorAll('.catalog-folder').forEach(folder => {
+                    folder.classList.remove('folder-open');
+                    updateFolderUI(folder);
+                });
+
                 if (noResults) noResults.style.display = 'none';
                 return;
             }
@@ -1429,6 +1435,14 @@ function attachCatalogEvents() {
                     if (!nameEl) return;
                     if (match) {
                         catHasMatch = true; anyVisible = true;
+
+                        // Se coincide il nome della cartella, mostra tutti i figli.
+                        if (li.classList.contains('catalog-folder')) {
+                            li.querySelectorAll('.catalog-subitem').forEach(sub => {
+                                sub.classList.remove('hidden');
+                            });
+                        }
+
                         const idx2 = plain.toLowerCase().indexOf(q);
                         nameEl.innerHTML =
                             esc(plain.slice(0,idx2)) + '<mark>' + esc(plain.slice(idx2, idx2+q.length)) + '</mark>' + esc(plain.slice(idx2+q.length));
@@ -1451,6 +1465,10 @@ function attachCatalogEvents() {
                         catHasMatch = true; anyVisible = true;
                     }
                 });
+                cat.querySelectorAll('.catalog-folder').forEach(folder => {
+                    updateFolderUI(folder);
+                });
+
                 panel.classList.toggle('open', catHasMatch);
                 catBtn.setAttribute('aria-expanded', catHasMatch ? 'true' : 'false');
             });
