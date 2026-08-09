@@ -1,0 +1,9 @@
+{
+  "name": "Catalogo Server",
+  "short_name": "Catalogo",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#16213e",
+  "theme_color": "#16213e",
+  "icons": []
+}
