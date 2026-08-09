@@ -481,6 +481,7 @@ function openFolderPopup(folder) {
                     updates[userPath] = {
                         status:    selectedStatus,
                         rating:    selectedRating || null,
+                        source:    'manual',
                         updatedAt: Date.now()
                     };
                 }
@@ -711,7 +712,7 @@ async function saveCatalogEntry() {
         if (!popupSelectedStatus) {
             await remove(userRef);
         } else {
-            await set(userRef, { status: popupSelectedStatus, rating: popupSelectedRating || null, updatedAt: Date.now() });
+            await set(userRef, { status: popupSelectedStatus, rating: popupSelectedRating || null, source: 'manual', updatedAt: Date.now() });
         }
         closePopup();
     } catch (e) {
