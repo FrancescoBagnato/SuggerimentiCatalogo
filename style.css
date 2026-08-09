@@ -1354,3 +1354,75 @@ input[type="search"]::placeholder { color: rgba(255,255,255,.35); }
     display: list-item !important;
     visibility: visible !important;
 }
+.evade-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: rgba(0, 0, 0, .72);
+}
+
+.evade-modal {
+    width: min(520px, 100%);
+    padding: 24px;
+    border: 1px solid var(--border, #3a3a3a);
+    border-radius: 14px;
+    background: var(--panel, #202020);
+    color: var(--hi, #fff);
+    box-shadow: 0 20px 80px rgba(0, 0, 0, .45);
+}
+
+.evade-modal h3 {
+    margin: 0 0 8px;
+    font-size: 21px;
+}
+
+.evade-subtitle {
+    margin: 0 0 20px;
+    color: var(--low, #aaa);
+}
+
+.evade-modal label {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 14px;
+    color: var(--mid, #ccc);
+    font-size: 13px;
+}
+
+.evade-modal input,
+.evade-modal select,
+.evade-modal textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #444;
+    border-radius: 8px;
+    background: #151515;
+    color: #fff;
+}
+
+.evade-modal textarea {
+    min-height: 90px;
+    resize: vertical;
+}
+
+.evade-check {
+    flex-direction: row !important;
+    align-items: center;
+    cursor: pointer;
+}
+
+.evade-check input {
+    width: auto;
+}
+
+.evade-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 24px;
+}
