@@ -1,3 +1,5 @@
+function initCatalog() {}
+
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js';
 import {
     getDatabase, ref, push, onValue,
@@ -457,16 +459,15 @@ let popupSelectedRating = 0;
 
 function openFolderPopup(folder) {
     const folderTitle = folder.dataset.title;
-    const subitems    = Array.from(folder.querySelectorAll('.catalog-subitem'));
-    if (!subitems.length) {
-
-        openCatalogPopup(folderTitle);
+    const folderPath = folder.dataset.path || folderTitle;
+    const leafItems = Array.from(folder.querySelectorAll('[data-leaf="true"]'));
+    if (!leafItems.length) {
+        openCatalogPopup(folderTitle, folderPath === folderTitle ? null : folderPath.slice(0, -(folderTitle.length + 3)));
         return;
     }
 
     let selectedStatus = null;
     let selectedRating = 0;
-
     const overlay = document.getElementById('catalogPopupOverlay');
     const pts = '12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26';
 
@@ -475,39 +476,25 @@ function openFolderPopup(folder) {
             <div class="popup-handle"></div>
             <div class="popup-title">${esc(folderTitle)}</div>
             <div class="popup-subtitle">Applica a tutto il contenuto della cartella</div>
-
-            <div class="popup-nick-row">
-                <div class="field" style="flex:1;gap:5px">
-                    <label style="font-size:12px">Nickname</label>
-                    <input type="text" id="popupNick" placeholder="Lorem Ipsum" value="${esc(getNickname())}" autocomplete="off" maxlength="20">
-                </div>
-            </div>
-
+            <div class="popup-nick-row"><div class="field" style="flex:1;gap:5px">
+                <label style="font-size:12px">Nickname</label>
+                <input type="text" id="popupNick" placeholder="Lorem Ipsum" value="${esc(getNickname())}" autocomplete="off" maxlength="20">
+            </div></div>
             <div class="popup-stars-label">Stato per tutti i titoli</div>
             <div class="popup-status-row">
                 <button class="status-btn" data-status="seen"><span class="sb-icon">✅</span> Visto</button>
                 <button class="status-btn" data-status="watching"><span class="sb-icon">▶️</span> In corso</button>
                 <button class="status-btn status-btn-reset" data-status="none"><span class="sb-icon">✕</span> Resetta</button>
             </div>
-
             <div class="popup-stars-label">Voto uguale per tutti <span style="font-size:10px;color:var(--low);font-weight:400;text-transform:none;letter-spacing:0">(opzionale)</span></div>
             <div class="popup-stars" id="popupStars">
                 ${Array.from({length:10}, (_, i) => {
                     const val = i + 1;
                     const uid = 'fp_' + Math.random().toString(36).slice(2,7);
-                    return '<button class="star-btn" data-val="' + val + '" title="' + val + '/10">'
-                        + '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">'
-                        + '<defs><clipPath id="' + uid + '"><rect x="0" y="0" width="12" height="24"/></clipPath></defs>'
-                        + '<polygon class="star-full" points="' + pts + '"/>'
-                        + '<polygon class="star-half" points="' + pts + '" clip-path="url(#' + uid + ')"/>'
-                        + '</svg></button>';
+                    return `<button class="star-btn" data-val="${val}" title="${val}/10"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><defs><clipPath id="${uid}"><rect x="0" y="0" width="12" height="24"/></clipPath></defs><polygon class="star-full" points="${pts}"/><polygon class="star-half" points="${pts}" clip-path="url(#${uid})"/></svg></button>`;
                 }).join('')}
             </div>
-
-            <div class="popup-actions">
-                <button class="btn-popup-cancel" id="popupCancel">Annulla</button>
-                <button class="btn-popup-save" id="popupSave">Applica a tutti</button>
-            </div>
+            <div class="popup-actions"><button class="btn-popup-cancel" id="popupCancel">Annulla</button><button class="btn-popup-save" id="popupSave">Applica a tutti</button></div>
             <button class="btn-watchlist-toggle" id="popupFolderWatchlist">♡ Aggiungi cartella alla watchlist</button>
         </div>`;
 
@@ -515,102 +502,77 @@ function openFolderPopup(folder) {
     overlay.classList.remove('closing');
     addSwipeToClose(overlay);
 
-    function refreshFolderWlBtn() {
+    const refreshWatchlistButton = () => {
         const btn = overlay.querySelector('#popupFolderWatchlist');
-        if (!btn) return;
-        const inWl = isInWatchlist(folderTitle);
+        const inWl = isInWatchlist(folderPath);
         btn.textContent = inWl ? '♥ In watchlist' : '♡ Aggiungi cartella alla watchlist';
         btn.classList.toggle('btn-watchlist-toggle-active', inWl);
-    }
-    refreshFolderWlBtn();
+    };
+    refreshWatchlistButton();
 
     overlay.querySelector('#popupFolderWatchlist').addEventListener('click', async () => {
-        const nick = document.getElementById('popupNick').value.trim();
+        const nick = overlay.querySelector('#popupNick').value.trim();
         if (!nick) { alert('Inserisci prima il tuo nickname.'); return; }
         saveNickname(nick);
-        const btn  = overlay.querySelector('#popupFolderWatchlist');
-        btn.disabled = true; btn.textContent = 'Salvataggio…';
-        try {
-            await toggleWatchlist(folderTitle, folderTitle);
-            refreshFolderWlBtn();
-        } catch(e) { alert('Errore: ' + e.message); }
+        const btn = overlay.querySelector('#popupFolderWatchlist');
+        btn.disabled = true;
+        try { await toggleWatchlist(folderPath, folderPath); refreshWatchlistButton(); }
+        catch (e) { alert('Errore: ' + e.message); }
         finally { btn.disabled = false; }
     });
 
-    function applyStarClasses(btns, activeRating) {
-        btns.forEach(b => {
-            const v = parseFloat(b.dataset.val);
-            b.classList.remove('lit','half-lit');
-            if (activeRating >= v)            b.classList.add('lit');
-            else if (activeRating >= v - 0.5) b.classList.add('half-lit');
-        });
-    }
-    const starBtns = Array.from(overlay.querySelectorAll('.star-btn'));
-    starBtns.forEach(btn => {
+    const applyStars = (buttons, rating) => buttons.forEach(btn => {
+        const value = parseFloat(btn.dataset.val);
+        btn.classList.remove('lit', 'half-lit');
+        if (rating >= value) btn.classList.add('lit');
+        else if (rating >= value - 0.5) btn.classList.add('half-lit');
+    });
+    const starButtons = Array.from(overlay.querySelectorAll('.star-btn'));
+    starButtons.forEach(btn => {
         btn.addEventListener('click', e => {
-            const v = parseFloat(btn.dataset.val);
-            const rect = btn.getBoundingClientRect();
-            const half = (e.clientX - rect.left) < rect.width / 2;
-            const chosen = half ? v - 0.5 : v;
-            selectedRating = (selectedRating === chosen) ? 0 : chosen;
-            applyStarClasses(starBtns, selectedRating);
+            const value = parseFloat(btn.dataset.val);
+            const half = e.clientX - btn.getBoundingClientRect().left < btn.getBoundingClientRect().width / 2;
+            const chosen = half ? value - 0.5 : value;
+            selectedRating = selectedRating === chosen ? 0 : chosen;
+            applyStars(starButtons, selectedRating);
         });
         btn.addEventListener('mousemove', e => {
-            const v = parseFloat(btn.dataset.val);
-            const rect = btn.getBoundingClientRect();
-            applyStarClasses(starBtns, (e.clientX - rect.left) < rect.width / 2 ? v - 0.5 : v);
+            const value = parseFloat(btn.dataset.val);
+            const half = e.clientX - btn.getBoundingClientRect().left < btn.getBoundingClientRect().width / 2;
+            applyStars(starButtons, half ? value - 0.5 : value);
         });
-        btn.addEventListener('mouseleave', () => applyStarClasses(starBtns, selectedRating));
+        btn.addEventListener('mouseleave', () => applyStars(starButtons, selectedRating));
     });
 
-    overlay.querySelectorAll('.status-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const s = btn.dataset.status;
-            selectedStatus = s === 'none' ? null : s;
-            overlay.querySelectorAll('.status-btn').forEach(b => b.classList.remove('active-seen','active-watching'));
-            if (selectedStatus === 'seen')     btn.classList.add('active-seen');
-            if (selectedStatus === 'watching') btn.classList.add('active-watching');
-        });
-    });
+    overlay.querySelectorAll('.status-btn').forEach(btn => btn.addEventListener('click', () => {
+        selectedStatus = btn.dataset.status === 'none' ? null : btn.dataset.status;
+        overlay.querySelectorAll('.status-btn').forEach(item => item.classList.remove('active-seen', 'active-watching'));
+        if (selectedStatus) btn.classList.add(selectedStatus === 'seen' ? 'active-seen' : 'active-watching');
+    }));
 
     overlay.querySelector('#popupSave').addEventListener('click', async () => {
-        const nick = document.getElementById('popupNick').value.trim();
+        const nick = overlay.querySelector('#popupNick').value.trim();
         if (!nick) { alert('Inserisci il tuo nickname.'); return; }
         saveNickname(nick);
-
         const saveBtn = overlay.querySelector('#popupSave');
         saveBtn.disabled = true;
         saveBtn.textContent = 'Salvataggio…';
-
         try {
             const updates = {};
-            for (const li of subitems) {
-                const subTitle  = li.dataset.title;
-                const fbTitle   = folderTitle + ' — ' + subTitle;
-                const key       = titleToKey(fbTitle);
-                const userPath  = 'catalog/' + key + '/users/' + nick;
-                if (!selectedStatus) {
-                    await remove(ref(db, userPath));
-                } else {
-                    updates[userPath] = {
-                        status:    selectedStatus,
-                        rating:    selectedRating || null,
-                        source:    'manual',
-                        updatedAt: Date.now()
-                    };
-                }
+            for (const leaf of leafItems) {
+                const leafPath = leaf.dataset.path;
+                const userPath = 'catalog/' + titleToKey(leafPath) + '/users/' + nick;
+                if (!selectedStatus) await remove(ref(db, userPath));
+                else updates[userPath] = { status: selectedStatus, rating: selectedRating || null, source: 'manual', updatedAt: Date.now() };
             }
-            for (const [path, val] of Object.entries(updates)) {
-                await set(ref(db, path), val);
-            }
+            for (const [userPath, value] of Object.entries(updates)) await set(ref(db, userPath), value);
             closePopup();
-        } catch(e) {
+        } catch (e) {
             alert('Errore: ' + e.message);
             saveBtn.disabled = false;
             saveBtn.textContent = 'Applica a tutti';
         }
     });
-
     overlay.querySelector('#popupCancel').addEventListener('click', closePopup);
     overlay.addEventListener('click', e => { if (e.target === overlay) closePopup(); });
 }
@@ -836,107 +798,6 @@ async function saveCatalogEntry() {
     }
 }
 
-function updateFolderUI(folder) {
-    const parent = folder.dataset.title;
-    const subitems = Array.from(
-        folder.querySelectorAll(':scope > .ci-folder-list > .catalog-subitem')
-    );
-
-    const usersByNick = {};
-
-    subitems.forEach(li => {
-        const subTitle = li.dataset.title;
-        const firebaseTitle = parent + ' — ' + subTitle;
-        const key = titleToKey(firebaseTitle);
-        const users = (catalogData[key] || {}).users || {};
-
-        Object.entries(users).forEach(([nick, user]) => {
-            if (!usersByNick[nick]) usersByNick[nick] = [];
-            if (user.status === 'seen' || user.status === 'watching') {
-                usersByNick[nick].push(user.status);
-            }
-        });
-    });
-
-    const seenNicks = [];
-    const watchNicks = [];
-
-    Object.entries(usersByNick).forEach(([nick, statuses]) => {
-        if (!statuses.length) return;
-
-        // Verde solo se tutti i figli risultano visti.
-        if (
-            statuses.length === subitems.length &&
-            statuses.every(status => status === 'seen')
-        ) {
-            seenNicks.push(nick);
-        } else {
-            // Se almeno un figlio ha uno stato, ma non sono tutti visti:
-            // un solo ticker giallo.
-            watchNicks.push(nick);
-        }
-    });
-
-    const ciMain = folder.querySelector(':scope > .ci-main');
-    if (!ciMain) return;
-
-    const toggle = folder.classList.contains('folder-open') ? '▼' : '▶';
-
-    const toggleEl = ciMain.querySelector('.ci-folder-toggle');
-    if (toggleEl) {
-        toggleEl.textContent = toggle;
-    }
-
-    let avatarDiv = folder.querySelector(':scope > .ci-folder-avatars');
-
-    if (!avatarDiv) {
-        avatarDiv = document.createElement('div');
-        avatarDiv.className = 'ci-folder-avatars';
-
-        const folderList = folder.querySelector(':scope > .ci-folder-list');
-        folder.insertBefore(avatarDiv, folderList);
-    }
-
-    avatarDiv.innerHTML = [
-        ...seenNicks.map(nick =>
-            `<div class="ci-avatar seen"
-                title="${esc(nick)} — Visto"
-                data-tooltip="${esc(nick)}">${esc(nick[0].toUpperCase())}</div>`
-        ),
-        ...watchNicks.map(nick =>
-            `<div class="ci-avatar watching"
-                title="${esc(nick)} — In corso"
-                data-tooltip="${esc(nick)}">${esc(nick[0].toUpperCase())}</div>`
-        )
-    ].join('');
-}
-
-function updateCatalogItemUI(li) {
-    const title     = li.dataset.title;
-    const parent    = li.dataset.parent || null;
-    const fbTitle   = parent ? parent + ' — ' + title : title;
-    const key       = titleToKey(fbTitle);
-    const data      = catalogData[key] || {};
-    const users     = data.users || {};
-    const avg       = avgRating(users);
-    const seenUsers = Object.entries(users).filter(([, u]) => u.status === 'seen');
-    const watchUsers= Object.entries(users).filter(([, u]) => u.status === 'watching');
-
-    const ciMain   = li.querySelector('.ci-main');
-    const nameSpan = ciMain.querySelector('.ci-name');
-    const plainName = nameSpan.textContent;
-
-    ciMain.innerHTML = `
-        <span class="ci-name">${plainName}</span>
-        ${avg ? `<span class="ci-stars">${avg.toFixed(1)}★</span>` : ''}
-    `;
-
-    let avatarDiv = li.querySelector('.ci-avatars');
-    if (!avatarDiv) { avatarDiv = document.createElement('div'); avatarDiv.className = 'ci-avatars'; li.appendChild(avatarDiv); }
-    avatarDiv.innerHTML = [...seenUsers.map(([n]) => `<div class="ci-avatar seen" title="${esc(n)} — Visto" data-tooltip="${esc(n)}">${esc(n[0].toUpperCase())}</div>`),
-        ...watchUsers.map(([n]) => `<div class="ci-avatar watching" title="${esc(n)} — In corso" data-tooltip="${esc(n)}">${esc(n[0].toUpperCase())}</div>`)
-    ].join('');
-}
 
 onValue(catalogRef, snap => {
     catalogData = snap.val() || {};
@@ -1401,298 +1262,268 @@ document.querySelectorAll('[data-sugg-sort]').forEach(tab => {
     });
 });
 
-function initCatalog() {
+function catalogChildren(node) {
+    if (!node || !node.children) return [];
+    return Array.isArray(node.children) ? node.children : Object.values(node.children);
+}
 
+function normalizeCatalogNode(value) {
+    if (typeof value === 'string') return { title: value, type: 'single', kind: 'movie' };
+    if (!value || typeof value !== 'object') return null;
+    const node = { ...value, title: String(value.title || '') };
+    node.children = catalogChildren(value).map(normalizeCatalogNode).filter(Boolean);
+    if (!node.kind) node.kind = node.type === 'folder' ? 'collection' : 'movie';
+    if (node.type === 'folder' || node.children.length) node.type = 'folder';
+    return node.title ? node : null;
+}
+
+function isEpisodeNode(node) {
+    return node && (node.kind === 'episode' || node.type === 'episode');
+}
+
+function renderableChildren(node) {
+    return catalogChildren(node).filter(child => !isEpisodeNode(child));
+}
+
+function collectCatalogLeaves(node, path = []) {
+    if (!node || isEpisodeNode(node)) return [];
+    const currentPath = [...path, node.title];
+    const children = renderableChildren(node);
+    if (!children.length) return [{ node, path: currentPath.join(' — ') }];
+    return children.flatMap(child => collectCatalogLeaves(child, currentPath));
+}
+
+function renderCatalogNode(node, parentPath = [], depth = 0) {
+    if (!node || isEpisodeNode(node)) return '';
+    const pathParts = [...parentPath, node.title];
+    const fullPath = pathParts.join(' — ');
+    const children = renderableChildren(node);
+    const safeTitle = esc(node.title);
+    const safePath = esc(fullPath);
+    const hasChildren = children.length > 0;
+    const isFolder = hasChildren;
+
+    if (!isFolder) {
+        return `<li class="catalog-item" data-title="${safeTitle}" data-path="${safePath}" data-leaf="true" data-depth="${depth}"><div class="ci-main"><span class="ci-name">${safeTitle}</span></div></li>`;
+    }
+
+    const childrenHtml = children.map(child => renderCatalogNode(child, pathParts, depth + 1)).join('');
+    return `<li class="catalog-item catalog-folder" data-title="${safeTitle}" data-path="${safePath}" data-type="folder" data-depth="${depth}">
+        <div class="ci-main"><span class="ci-name">${safeTitle}</span><span class="ci-folder-toggle">▶</span></div>
+        <ul class="ci-folder-list">${childrenHtml}</ul>
+    </li>`;
+}
+
+function buildCategoryHTML(catId, catName, dotClass, countId, foldersId, episodesId, items) {
+    const normalized = items.map(normalizeCatalogNode).filter(Boolean).sort((a, b) => a.title.localeCompare(b.title, 'it', { sensitivity: 'base' }));
+    const listHTML = normalized.map(node => renderCatalogNode(node)).join('');
+    return `<div class="catalog-category">
+        <button class="catalog-cat-btn" data-target="${catId}" aria-expanded="false"><span class="cat-left"><span class="cat-dot ${dotClass}"></span><span class="cat-name">${catName}</span><span class="cat-count cat-count-folders" id="${foldersId}"></span><span class="cat-episodes" id="${episodesId}"></span><span style="display:none" id="${countId}">0</span></span><span class="cat-chevron"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span></button>
+        <div class="catalog-panel" id="${catId}"><ul class="catalog-list">${listHTML}</ul></div>
+    </div>`;
 }
 
 function renderCatalogFromFirebase() {
     const container = document.getElementById('catalogContainer');
     if (!container) return;
-
-    const tv   = catalogStructure.serietv || [];
-    const film = catalogStructure.film    || [];
-
+    const tv = catalogStructure.serietv || [];
+    const film = catalogStructure.film || [];
     if (!tv.length && !film.length) {
         container.innerHTML = '<div class="catalog-empty">Nessun titolo nel catalogo.<br>Aggiungili dal pannello admin → 🗂️ Catalogo.</div>';
         return;
     }
-
-    container.innerHTML = buildCategoryHTML('cat-serietv', 'Serie TV', 'dot-tv', 'count-serietv', 'folders-serietv', 'episodes-serietv', tv)
-                        + buildCategoryHTML('cat-film',    'Film',     'dot-film','count-film',    'folders-film',    'episodes-film',    film)
-                        + '<div id="catalogNoResults" class="catalog-empty" style="display:none">Nessun titolo trovato.</div>';
-
+    container.innerHTML = buildCategoryHTML('cat-serietv', 'Serie TV', 'dot-tv', 'count-serietv', 'folders-serietv', 'episodes-serietv', tv) + buildCategoryHTML('cat-film', 'Film', 'dot-film', 'count-film', 'folders-film', 'episodes-film', film) + '<div id="catalogNoResults" class="catalog-empty" style="display:none">Nessun titolo trovato.</div>';
     attachCatalogEvents();
-
     updateAllCategoryCounters();
 }
 
-function buildCategoryHTML(catId, catName, dotClass, countId, foldersId, episodesId, items) {
+function attachCatalogEvents() {
+    const container = document.getElementById('catalogContainer');
+    if (!container) return;
+    container.querySelectorAll('.catalog-folder').forEach(folder => folder.classList.remove('folder-open'));
+    container.onclick = e => {
+        const toggle = e.target.closest('.ci-folder-toggle');
+        const folder = e.target.closest('.catalog-folder');
+        if (toggle && folder) {
+            e.preventDefault();
+            e.stopPropagation();
 
-    const sortedItems = [...items].sort((a, b) => a.title.localeCompare(b.title, 'it', {sensitivity:'base'}));
-    const listHTML = sortedItems.map(item => {
-        const safe    = esc(item.title);
-        const display = item.title;
-        if (item.type === 'folder') {
-            const subsHTML = (item.children || []).map(sub => {
-                const safeSub    = esc(sub);
-                const displaySub = sub;
-                return `<li class="catalog-item catalog-subitem" data-title="${safeSub}" data-parent="${safe}"><div class="ci-main"><span class="ci-name">${displaySub}</span></div></li>`;
-            }).join('');
-            return `<li class="catalog-item catalog-folder" data-title="${safe}" data-type="folder">
-                <div class="ci-main"><span class="ci-name">${display}</span><span class="ci-folder-toggle">▶</span></div>
-                <ul class="ci-folder-list">${subsHTML}</ul>
-            </li>`;
-        } else {
-            return `<li class="catalog-item" data-title="${safe}"><div class="ci-main"><span class="ci-name">${display}</span></div></li>`;
+            const isOpen = folder.classList.toggle('folder-open');
+            toggle.textContent = isOpen ? '▼' : '▶';
+
+            const list = folder.querySelector(':scope > .ci-folder-list');
+            if (list) {
+                list.style.maxHeight = isOpen ? 'none' : '0';
+                list.style.overflow = isOpen ? 'visible' : 'hidden';
+            }
+
+            // Ogni apertura parte da un solo livello: tutti i discendenti
+            // vengono richiusi e potranno essere aperti manualmente.
+            folder.querySelectorAll(':scope .catalog-folder').forEach(child => {
+                child.classList.remove('folder-open');
+                const childToggle = child.querySelector(':scope > .ci-main .ci-folder-toggle');
+                if (childToggle) childToggle.textContent = '▶';
+                const childList = child.querySelector(':scope > .ci-folder-list');
+                if (childList) {
+                    childList.style.maxHeight = '0';
+                    childList.style.overflow = 'hidden';
+                }
+            });
+
+            updateFolderUI(folder);
+            return;
         }
-    }).join('');
+        if (folder && e.target.closest('.catalog-folder > .ci-main .ci-name')) { e.stopPropagation(); openFolderPopup(folder); return; }
+        const leaf = e.target.closest('[data-leaf="true"]');
+        if (leaf) { e.stopPropagation(); openCatalogPopup(leaf.dataset.title, leaf.dataset.path.includes(' — ') ? leaf.dataset.path.slice(0, -(leaf.dataset.title.length + 3)) : null); }
+    };
+    container.querySelectorAll('.catalog-cat-btn').forEach(btn => btn.onclick = function() {
+        const panel = document.getElementById(this.dataset.target);
+        const open = panel && panel.classList.contains('open');
+        container.querySelectorAll('.catalog-panel').forEach(p => p.classList.remove('open'));
+        container.querySelectorAll('.catalog-cat-btn').forEach(b => b.setAttribute('aria-expanded', 'false'));
+        if (!open && panel) { panel.classList.add('open'); this.setAttribute('aria-expanded', 'true'); }
+    });
+    container.querySelectorAll('.catalog-item').forEach(li => li.dataset.plainName = li.querySelector('.ci-name')?.textContent || '');
 
-    return `<div class="catalog-category">
-        <button class="catalog-cat-btn" data-target="${catId}" aria-expanded="false">
-            <span class="cat-left">
-                <span class="cat-dot ${dotClass}"></span>
-                <span class="cat-name">${catName}</span>
-                <span class="cat-count cat-count-folders" id="${foldersId}"></span>
-                <span class="cat-episodes" id="${episodesId}"></span>
-                <span style="display:none" id="${countId}">0</span>
-            </span>
-            <span class="cat-chevron"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-        </button>
-        <div class="catalog-panel" id="${catId}">
-            <ul class="catalog-list">${listHTML}</ul>
-        </div>
-    </div>`;
+    const input = document.getElementById('catalogSearch');
+    const noResults = document.getElementById('catalogNoResults');
+    if (input) input.oninput = function() {
+        const q = this.value.trim().toLowerCase();
+        let any = false;
+        container.querySelectorAll('.catalog-category').forEach(category => {
+            let categoryMatch = false;
+            category.querySelectorAll('.catalog-item').forEach(item => {
+                const name = item.dataset.plainName || '';
+                const match = !q || name.toLowerCase().includes(q);
+                const descendantMatch = item.classList.contains('catalog-folder') && Array.from(item.querySelectorAll('.catalog-item')).some(child => (child.dataset.plainName || '').toLowerCase().includes(q));
+
+                let ancestorMatch = false;
+                let ancestor = item.parentElement?.closest('.catalog-folder');
+                while (ancestor) {
+                    const ancestorName = ancestor.dataset.plainName || '';
+                    if (q && ancestorName.toLowerCase().includes(q)) {
+                        ancestorMatch = true;
+                        break;
+                    }
+                    ancestor = ancestor.parentElement?.closest('.catalog-folder');
+                }
+
+                // Se il nome della cartella principale corrisponde,
+                // mostra anche tutto il suo ramo discendente.
+                const visible = !q || match || descendantMatch || ancestorMatch;
+                item.classList.toggle('hidden', !visible);
+                if (visible && q) categoryMatch = any = true;
+                if (item.classList.contains('catalog-folder')) {
+                    item.classList.toggle('folder-open', Boolean(q && descendantMatch));
+                    updateFolderUI(item);
+                }
+                const nameEl = item.querySelector(':scope > .ci-main .ci-name');
+                if (nameEl) {
+                    nameEl.innerHTML = esc(name);
+                    if (q && match) { const i = name.toLowerCase().indexOf(q); nameEl.innerHTML = esc(name.slice(0, i)) + '<mark>' + esc(name.slice(i, i + q.length)) + '</mark>' + esc(name.slice(i + q.length)); }
+                }
+            });
+            const panel = category.querySelector('.catalog-panel');
+            const button = category.querySelector('.catalog-cat-btn');
+            panel.classList.toggle('open', Boolean(q && categoryMatch));
+            button.setAttribute('aria-expanded', q && categoryMatch ? 'true' : 'false');
+        });
+        if (!q) container.querySelectorAll('.catalog-panel').forEach(p => p.classList.remove('open'));
+        if (noResults) noResults.style.display = q && !any ? 'block' : 'none';
+    };
+    container.querySelectorAll('[data-leaf="true"]').forEach(updateCatalogItemUI);
+    container.querySelectorAll('.catalog-folder').forEach(updateFolderUI);
+    initAvatarTooltips(container);
 }
 
-function attachCatalogEvents() {
-
-    document.querySelectorAll('.catalog-folder').forEach(folder => {
-        folder.classList.remove('folder-open');
+function updateFolderUI(folder) {
+    const leaves = Array.from(folder.querySelectorAll(':scope .catalog-folder [data-leaf="true"], :scope > .ci-folder-list > [data-leaf="true"]'));
+    const usersByNick = {};
+    leaves.forEach(leaf => Object.entries((catalogData[titleToKey(leaf.dataset.path)] || {}).users || {}).forEach(([nick, user]) => {
+        if (!usersByNick[nick]) usersByNick[nick] = [];
+        if (user.status) usersByNick[nick].push(user.status);
+    }));
+    const seen = [], watching = [];
+    Object.entries(usersByNick).forEach(([nick, statuses]) => {
+        if (statuses.length === leaves.length && statuses.every(s => s === 'seen')) seen.push(nick); else if (statuses.length) watching.push(nick);
     });
+    const toggle = folder.querySelector(':scope > .ci-main .ci-folder-toggle');
+    if (toggle) toggle.textContent = folder.classList.contains('folder-open') ? '▼' : '▶';
+    let avatars = folder.querySelector(':scope > .ci-folder-avatars');
+    if (!avatars) { avatars = document.createElement('div'); avatars.className = 'ci-folder-avatars'; folder.insertBefore(avatars, folder.querySelector(':scope > .ci-folder-list')); }
+    avatars.innerHTML = [...seen.map(n => `<div class="ci-avatar seen" title="${esc(n)} — Visto">${esc(n[0].toUpperCase())}</div>`), ...watching.map(n => `<div class="ci-avatar watching" title="${esc(n)} — In corso">${esc(n[0].toUpperCase())}</div>`)].join('');
+}
 
-    const catalogContainer = document.getElementById('catalogContainer');
-    if (catalogContainer) {
-
-        const newContainer = catalogContainer.cloneNode(true);
-        catalogContainer.parentNode.replaceChild(newContainer, catalogContainer);
-
-        newContainer.addEventListener('click', e => {
-
-            const toggle = e.target.closest('.ci-folder-toggle');
-            if (toggle) {
-                e.stopPropagation();
-                const folder = toggle.closest('.catalog-folder');
-                if (folder) {
-                    folder.classList.toggle('folder-open');
-                    updateFolderUI(folder);
-                }
-                return;
-            }
-
-            const nameSpan = e.target.closest('.catalog-folder > .ci-main .ci-name');
-            if (nameSpan) {
-                e.stopPropagation();
-                const folder = nameSpan.closest('.catalog-folder');
-                if (folder) openFolderPopup(folder);
-                return;
-            }
-
-            const subitem = e.target.closest('.catalog-subitem');
-            if (subitem) {
-                e.stopPropagation();
-                openCatalogPopup(subitem.dataset.title, subitem.dataset.parent || null);
-                return;
-            }
-
-            const single = e.target.closest('.catalog-item:not(.catalog-folder):not(.catalog-subitem)');
-            if (single) {
-                openCatalogPopup(single.dataset.title);
-            }
-        });
-
-        newContainer.querySelectorAll('.catalog-cat-btn').forEach(btn => {
-            btn.setAttribute('aria-expanded', 'false');
-            btn.addEventListener('click', function() {
-                const id    = this.dataset.target;
-                const panel = document.getElementById(id);
-                const open  = panel?.classList.contains('open');
-                newContainer.querySelectorAll('.catalog-panel').forEach(p => p.classList.remove('open'));
-                newContainer.querySelectorAll('.catalog-cat-btn').forEach(b => b.setAttribute('aria-expanded','false'));
-                if (!open && panel) { panel.classList.add('open'); this.setAttribute('aria-expanded','true'); }
-            });
-        });
-    }
-
-    document.querySelectorAll('.catalog-item').forEach(li => {
-        li.dataset.plainName = li.querySelector('.ci-name')?.textContent || '';
-    });
-
-    const searchInput = document.getElementById('catalogSearch');
-    const noResults   = document.getElementById('catalogNoResults');
-    if (searchInput) {
-
-        const newSearch = searchInput.cloneNode(true);
-        searchInput.parentNode.replaceChild(newSearch, searchInput);
-        newSearch.addEventListener('input', function() {
-            const q = this.value.trim().toLowerCase();
-            if (!q) {
-                document.querySelectorAll('.catalog-item').forEach(li => {
-                    li.classList.remove('hidden');
-                    li.querySelector('.ci-name').innerHTML = esc(li.dataset.plainName);
-                });
-                document.querySelectorAll('.catalog-panel').forEach(p => p.classList.remove('open'));
-                document.querySelectorAll('.catalog-cat-btn').forEach(b => b.setAttribute('aria-expanded','false'));
-
-                document.querySelectorAll('.catalog-folder').forEach(folder => {
-                    folder.classList.remove('folder-open');
-                    updateFolderUI(folder);
-                });
-
-                if (noResults) noResults.style.display = 'none';
-                return;
-            }
-            let anyVisible = false;
-            document.querySelectorAll('.catalog-category').forEach(cat => {
-                const panel  = cat.querySelector('.catalog-panel');
-                const catBtn = cat.querySelector('.catalog-cat-btn');
-                let catHasMatch = false;
-                cat.querySelectorAll('.catalog-item').forEach(li => {
-                    const plain = li.dataset.plainName || '';
-                    const match = plain.toLowerCase().includes(q);
-                    li.classList.toggle('hidden', !match);
-                    const nameEl = li.querySelector('.ci-name');
-                    if (!nameEl) return;
-                    if (match) {
-                        catHasMatch = true; anyVisible = true;
-
-                        // Se coincide il nome della cartella, mostra tutti i figli.
-                        if (li.classList.contains('catalog-folder')) {
-                            li.querySelectorAll('.catalog-subitem').forEach(sub => {
-                                sub.classList.remove('hidden');
-                            });
-                        }
-
-                        const idx2 = plain.toLowerCase().indexOf(q);
-                        nameEl.innerHTML =
-                            esc(plain.slice(0,idx2)) + '<mark>' + esc(plain.slice(idx2, idx2+q.length)) + '</mark>' + esc(plain.slice(idx2+q.length));
-
-                        if (li.classList.contains('catalog-subitem')) {
-                            const folder = li.closest('.catalog-folder');
-                            if (folder) folder.classList.add('folder-open');
-                        }
-                    } else {
-                        nameEl.innerHTML = esc(plain);
-                    }
-                });
-
-                cat.querySelectorAll('.catalog-folder').forEach(folder => {
-                    const hasVisible = Array.from(folder.querySelectorAll('.catalog-subitem'))
-                        .some(s => !s.classList.contains('hidden'));
-                    if (hasVisible) {
-                        folder.classList.add('folder-open');
-                        folder.classList.remove('hidden');
-                        catHasMatch = true; anyVisible = true;
-                    }
-                });
-                cat.querySelectorAll('.catalog-folder').forEach(folder => {
-                    updateFolderUI(folder);
-                });
-
-                panel.classList.toggle('open', catHasMatch);
-                catBtn.setAttribute('aria-expanded', catHasMatch ? 'true' : 'false');
-            });
-            if (noResults) noResults.style.display = anyVisible ? 'none' : 'block';
-        });
-    }
-
-    document.querySelectorAll('.catalog-item:not(.catalog-folder)').forEach(li => updateCatalogItemUI(li));
-    document.querySelectorAll('.catalog-folder').forEach(folder => updateFolderUI(folder));
-
-    initAvatarTooltips(document.getElementById('catalogContainer'));
+function updateCatalogItemUI(li) {
+    const path = li.dataset.path || li.dataset.title;
+    const data = catalogData[titleToKey(path)] || {};
+    const users = data.users || {};
+    const avg = avgRating(users);
+    const seen = Object.keys(users).filter(n => users[n].status === 'seen');
+    const watching = Object.keys(users).filter(n => users[n].status === 'watching');
+    const main = li.querySelector(':scope > .ci-main');
+    const name = li.querySelector(':scope > .ci-main .ci-name');
+    if (!main || !name) return;
+    const plain = li.dataset.plainName || name.textContent;
+    main.innerHTML = `<span class="ci-name">${esc(plain)}</span>${avg ? `<span class="ci-stars">${avg.toFixed(1)}★</span>` : ''}`;
+    let avatars = li.querySelector(':scope > .ci-avatars');
+    if (!avatars) { avatars = document.createElement('div'); avatars.className = 'ci-avatars'; li.appendChild(avatars); }
+    avatars.innerHTML = [...seen.map(n => `<div class="ci-avatar seen" title="${esc(n)} — Visto">${esc(n[0].toUpperCase())}</div>`), ...watching.map(n => `<div class="ci-avatar watching" title="${esc(n)} — In corso">${esc(n[0].toUpperCase())}</div>`)].join('');
 }
 
 function initAvatarTooltips(container) {
     if (!container) return;
-    container.addEventListener('click', e => {
-        const avatar = e.target.closest('.ci-avatar');
-        if (!avatar) {
-            document.querySelectorAll('.ci-avatar.tooltip-visible').forEach(a => a.classList.remove('tooltip-visible'));
-            return;
-        }
-        e.stopPropagation();
-        const isVisible = avatar.classList.contains('tooltip-visible');
-        document.querySelectorAll('.ci-avatar.tooltip-visible').forEach(a => a.classList.remove('tooltip-visible'));
-        if (!isVisible) {
-            avatar.classList.add('tooltip-visible');
 
-            const rect = avatar.getBoundingClientRect();
-            const tooltipEstimatedWidth = 80;
-            if (rect.left + tooltipEstimatedWidth > window.innerWidth - 8) {
-                avatar.style.setProperty('--tooltip-left', 'auto');
-                avatar.classList.add('tooltip-right-align');
-            } else {
-                avatar.classList.remove('tooltip-right-align');
-            }
+    container.addEventListener('click', event => {
+        const avatar = event.target.closest('.ci-avatar');
+
+        document.querySelectorAll('.ci-avatar.tooltip-visible')
+            .forEach(item => item.classList.remove('tooltip-visible'));
+
+        if (!avatar) return;
+
+        event.stopPropagation();
+        avatar.classList.add('tooltip-visible');
+
+        const rect = avatar.getBoundingClientRect();
+        if (rect.right + 90 > window.innerWidth) {
+            avatar.classList.add('tooltip-right-align');
+        } else {
+            avatar.classList.remove('tooltip-right-align');
         }
     });
 }
 
 function updateAllCategoryCounters() {
-    ['serietv','film'].forEach(key => {
-        const panel     = document.getElementById('cat-' + key);
-        const countEl   = document.getElementById('count-' + key);
-        const foldersEl = document.getElementById('folders-' + key);
+    ['serietv', 'film'].forEach(key => {
+        const panel = document.getElementById('cat-' + key);
         if (!panel) return;
-        if (countEl) {
-            const singles  = panel.querySelectorAll('.catalog-item:not(.catalog-folder):not(.catalog-subitem)').length;
-            const subitems = panel.querySelectorAll('.catalog-subitem').length;
-            countEl.textContent = singles + subitems;
-        }
-        if (foldersEl) {
-            const n = panel.querySelectorAll('.catalog-folder').length;
-            if (n > 0) foldersEl.textContent = n + ' cart.';
-        }
+        const leaves = panel.querySelectorAll('[data-leaf="true"]').length;
+        const folders = panel.querySelectorAll('.catalog-folder').length;
+        const count = document.getElementById('count-' + key);
+        const folderCount = document.getElementById('folders-' + key);
+        if (count) count.textContent = leaves;
+        if (folderCount) folderCount.textContent = folders ? folders + ' cart.' : '';
     });
 }
 
 function fbToArray(val) {
     if (!val) return [];
-    if (Array.isArray(val)) return val;
-    return Object.values(val).map(item => {
-        if (item && item.children && !Array.isArray(item.children)) {
-            item.children = Object.values(item.children);
-        }
-        return item;
-    });
+    return (Array.isArray(val) ? val : Object.values(val)).map(normalizeCatalogNode).filter(Boolean);
 }
+
 
 onValue(catalogStructRef, snap => {
     const data = snap.val();
     if (data) {
         catalogStructure.serietv = fbToArray(data.serietv);
-        catalogStructure.film    = fbToArray(data.film);
-                }
+        catalogStructure.film = fbToArray(data.film);
+    } else {
+        catalogStructure.serietv = [];
+        catalogStructure.film = [];
+    }
     renderCatalogFromFirebase();
-
-    const countersSnap = get(ref(db, 'counters'));
-    countersSnap.then(s => {
-        if (!s.exists()) return;
-        const d = s.val();
-        const suffixes2 = {
-            'folders-serietv':  ' cart.',
-            'episodes-serietv': ' ep.',
-            'folders-film':     ' cart.',
-            'episodes-film':    ' titoli'
-        };
-        const map = { 'folders-serietv':'folders-serietv','episodes-serietv':'episodes-serietv','folders-film':'folders-film','episodes-film':'episodes-film' };
-        Object.entries(map).forEach(([k,elId]) => {
-            const el = document.getElementById(elId);
-            if (el && d[k]) {
-                const num = String(d[k]).replace(/[^0-9]/g, '');
-                el.textContent = num + (suffixes2[k] || '');
-            }
-        });
-    });
 });
 
 function openAdminPanel() {
