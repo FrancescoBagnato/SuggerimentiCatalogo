@@ -178,14 +178,128 @@ function renderAdminBtn() {
 
 async function evade(id, title) {
     if (!isAdminMode) return;
-    if (!confirm(`Evadere "${title}"?`)) return;
-    try {
-        const snap = await get(ref(db, `requests/${id}`));
-        const data = snap.val();
-        if (!data) { alert('Richiesta non trovata.'); return; }
-        await push(evasedRef, { ...data, status: 'evasa', evadedAt: new Date().toLocaleDateString('it-IT'), evadedTimestamp: Date.now() });
-        await remove(ref(db, `requests/${id}`));
-    } catch (e) { alert('Errore: ' + e.message); }
+
+    const snap = await get(ref(db, `requests/${id}`));
+    const data = snap.val();
+
+    if (!data) {
+        alert('Richiesta non trovata.');
+        return;
+    }
+
+    const overlay = document.createElement('div');
+    overlay.className = 'evade-overlay';
+
+    overlay.innerHTML = `
+        <div class="evade-modal">
+            <h3>Evadi richiesta</h3>
+            <p class="evade-subtitle">
+                Vuoi aggiungere questo titolo alla sezione “Aggiunti di recente”?
+            </p>
+
+            <label>
+                Titolo
+                <input id="evadeTitle" type="text"
+                    value="${esc(data.title || title)}">
+            </label>
+
+            <label>
+                Tipo
+                <select id="evadeType">
+                    <option value="serie-completa">Serie TV completa</option>
+                    <option value="serie-stagione">Stagione singola</option>
+                    <option value="film-cartella">Raccolta Film</option>
+                    <option value="film-singolo">Film singolo</option>
+                </select>
+            </label>
+
+            <label>
+                Note
+                <textarea id="evadeNotes"
+                    placeholder="Note opzionali">${esc(data.notes || '')}</textarea>
+            </label>
+
+            <label class="evade-check">
+                <input id="evadeRecent" type="checkbox" checked>
+                <span>Aggiungi agli “Aggiunti di recente”</span>
+            </label>
+
+            <div class="evade-actions">
+                <button id="evadeCancel" class="ap-btn">
+                    Annulla
+                </button>
+                <button id="evadeConfirm" class="ap-btn-add">
+                    Conferma
+                </button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    const titleInput = overlay.querySelector('#evadeTitle');
+    const typeInput = overlay.querySelector('#evadeType');
+    const notesInput = overlay.querySelector('#evadeNotes');
+    const recentInput = overlay.querySelector('#evadeRecent');
+
+    const originalType = data.type || '';
+
+    if (originalType === 'Film') {
+        typeInput.value = 'film-singolo';
+    } else if (originalType === 'Serie TV') {
+        typeInput.value = 'serie-completa';
+    }
+
+    const close = () => overlay.remove();
+
+    overlay.querySelector('#evadeCancel').addEventListener('click', close);
+
+    overlay.addEventListener('click', event => {
+        if (event.target === overlay) close();
+    });
+
+    overlay.querySelector('#evadeConfirm').addEventListener('click', async () => {
+        const finalTitle = titleInput.value.trim();
+        const finalType = typeInput.value;
+        const finalNotes = notesInput.value.trim();
+
+        if (!finalTitle) {
+            titleInput.focus();
+            return;
+        }
+
+        const confirmButton = overlay.querySelector('#evadeConfirm');
+        confirmButton.disabled = true;
+        confirmButton.textContent = 'Salvataggio…';
+
+        try {
+            await push(evasedRef, {
+                ...data,
+                title: finalTitle,
+                type: finalType,
+                notes: finalNotes,
+                status: 'evasa',
+                evadedAt: new Date().toLocaleDateString('it-IT'),
+                evadedTimestamp: Date.now()
+            });
+
+            if (recentInput.checked) {
+                await push(recentRef, {
+                    title: finalTitle,
+                    type: finalType,
+                    notes: finalNotes,
+                    addedAt: Date.now()
+                });
+            }
+
+            await remove(ref(db, `requests/${id}`));
+            close();
+        } catch (error) {
+            alert('Errore: ' + error.message);
+            confirmButton.disabled = false;
+            confirmButton.textContent = 'Conferma';
+        }
+    });
 }
 
 function renderRequests(list) {
