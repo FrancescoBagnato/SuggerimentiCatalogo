@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Catalogo Server</title>
+    <link rel="icon" type="image/x-icon" href="./favicon.ico">
+    <link rel="apple-touch-icon" href="./apple-touch-icon.png">
+    <link rel="manifest" href="./manifest.json">
+    <meta name="theme-color" content="#16213e">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    
+    <nav class="topnav">
+        <div class="topnav-inner">
+            <div class="brand">
+                <span class="brand-icon">▶</span>
+                <span class="brand-name">Catalogo Server</span>
+            </div>
+            <button id="adminToggle" class="btn-admin">Admin</button>
+        </div>
+    </nav>
+
+    
+    <header class="hero">
+        <h1 class="hero-title">Cosa <em>vorresti vedere</em> dopo?</h1>
+        <p class="hero-sub">Invia una richiesta, suggerisci un titolo o vota quello degli altri.</p>
+    </header>
+
+    <main class="main">
+
+        
+        <section class="card" id="formCard">
+            <div class="card-label">Nuova richiesta</div>
+            <form id="requestForm" novalidate>
+                <div class="field-row">
+                    <div class="field">
+                        <label for="title">Titolo</label>
+                        <input type="text" id="title" required placeholder="Breaking Bad" autocomplete="off" maxlength="120">
+                    </div>
+                    <div class="field field--sm">
+                        <label for="type">Tipo</label>
+                        <select id="type" required>
+                            <option value="">—</option>
+                            <option value="Film">Film</option>
+                            <option value="Serie TV">Serie TV</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="field request-seasons-field" id="requestSeasonsField" hidden>
+                    <div class="season-label-row"><label>Stagioni richieste</label><span>seleziona solo quelle che ti servono ora</span></div>
+                    <div class="season-picker" id="requestSeasonsPicker" aria-label="Seleziona le stagioni richieste">
+                            <label class="season-option"><input type="checkbox" name="requestedSeason" value="1"><span>1</span></label>
+                            <label class="season-option"><input type="checkbox" name="requestedSeason" value="2"><span>2</span></label>
+                            <label class="season-option"><input type="checkbox" name="requestedSeason" value="3"><span>3</span></label>
+                            <label class="season-option"><input type="checkbox" name="requestedSeason" value="4"><span>4</span></label>
+                            <label class="season-option"><input type="checkbox" name="requestedSeason" value="5"><span>5</span></label>
+                            <label class="season-option"><input type="checkbox" name="requestedSeason" value="6"><span>6</span></label>
+                            <label class="season-option"><input type="checkbox" name="requestedSeason" value="7"><span>7</span></label>
+                            <label class="season-option"><input type="checkbox" name="requestedSeason" value="8"><span>8</span></label>
+                            <label class="season-option"><input type="checkbox" name="requestedSeason" value="9"><span>9</span></label>
+                            <label class="season-option"><input type="checkbox" name="requestedSeason" value="10"><span>10</span></label>
+                            <label class="season-option"><input type="checkbox" name="requestedSeason" value="11"><span>11</span></label>
+                            <label class="season-option"><input type="checkbox" name="requestedSeason" value="12"><span>12</span></label>
+                            <label class="season-option"><input type="checkbox" name="requestedSeason" value="13"><span>13</span></label>
+                            <label class="season-option"><input type="checkbox" name="requestedSeason" value="14"><span>14</span></label>
+                            <label class="season-option"><input type="checkbox" name="requestedSeason" value="15"><span>15</span></label>
+                            <label class="season-option"><input type="checkbox" name="requestedSeason" value="16"><span>16</span></label>
+                            <label class="season-option"><input type="checkbox" name="requestedSeason" value="17"><span>17</span></label>
+                            <label class="season-option"><input type="checkbox" name="requestedSeason" value="18"><span>18</span></label>
+                            <label class="season-option"><input type="checkbox" name="requestedSeason" value="19"><span>19</span></label>
+                            <label class="season-option"><input type="checkbox" name="requestedSeason" value="20"><span>20</span></label>
+                    </div>
+                </div>
+                <div class="field">
+                    <label for="requester">Nickname</label>
+                    <input type="text" id="requester" required placeholder="Lorem Ipsum" autocomplete="off" maxlength="30">
+                </div>
+                <div class="field">
+                    <label for="notes">Note <span class="label-opt">opzionale</span></label>
+                    <textarea id="notes" rows="2" placeholder="Es: stagione 2, lingua originale…" maxlength="300"></textarea>
+                </div>
+                <button type="submit" class="btn-submit">
+                    <span class="btn-submit-text">Invia richiesta</span>
+                    <span class="btn-submit-icon">→</span>
+                </button>
+            </form>
+        </section>
+
+        
+        <section class="card" id="catalogCard">
+            <div class="card-label">CATALOGO SERVER</div>
+
+            
+            <div class="catalog-tab-bar">
+                <button class="catalog-tab active" data-ctab="catalog">Catalogo</button>
+                <button class="catalog-tab" data-ctab="watchlist">Watchlist</button>
+                <button class="catalog-tab" data-ctab="recent">Novità</button>
+                <button class="catalog-tab" data-ctab="playtime">Classifica</button>
+            </div>
+
+            
+            <div id="catalogView">
+                <div class="catalog-search-wrap">
+                    <input type="search" id="catalogSearch" class="catalog-search" placeholder="Cerca un titolo…" autocomplete="off">
+                    <span class="catalog-search-icon">🔍</span>
+                </div>
+                
+                <div id="catalogContainer">
+                    <div class="state-loading"><span class="spinner"></span> Caricamento catalogo…</div>
+                </div>
+            </div>
+
+            
+            <div id="recentContainer" style="display:none">
+                <div id="recentList" class="recent-list">
+                    <div class="catalog-empty">Nessuna novità ancora.</div>
+                </div>
+            </div>
+
+            
+            <div id="playtimeContainer" style="display:none">
+                <div id="playtimeContent">
+                    <div class="state-loading"><span class="spinner"></span> Caricamento…</div>
+                </div>
+                <div id="playtimeUpdated" class="playtime-updated"></div>
+            </div>
+
+            
+            <div id="watchlistContainer" style="display:none">
+                <div class="watchlist-nick-bar">
+                    <input type="text" id="watchlistNickInput" placeholder="Lorem Ipsum" autocomplete="off">
+                    <button id="watchlistNickBtn" class="btn-watchlist-nick">Aggiorna</button>
+                </div>
+                <div id="watchlistContent" class="watchlist-content">
+                    <div class="catalog-empty">Inserisci il tuo nickname e premi Aggiorna.</div>
+                </div>
+            </div>
+        </section>
+
+        
+        <section class="card" id="suggestedCard">
+            <div class="card-header-row">
+                <div class="card-label">Consigliati</div>
+                <span id="suggestedCount" class="pill">0</span>
+            </div>
+
+            
+            <div class="sugg-form" id="suggForm">
+                <div class="field-row">
+                    <div class="field">
+                        <label for="suggTitle">Titolo consigliato</label>
+                        <input type="text" id="suggTitle" placeholder="Breaking Bad" autocomplete="off" maxlength="120">
+                    </div>
+                    <div class="field field--sm">
+                        <label for="suggNick">Nickname</label>
+                        <input type="text" id="suggNick" placeholder="Lorem Ipsum" autocomplete="off" maxlength="30">
+                    </div>
+                </div>
+                <div class="field" style="margin-top:10px">
+                    <label>Il tuo voto <span class="label-opt">½ cliccando la metà sinistra</span></label>
+                    <div class="sugg-form-stars" id="suggFormStars">
+                        <span class="sugg-form-stars-hint">Tocca per votare</span>
+                    </div>
+                    <input type="hidden" id="suggFormRating" value="0">
+                </div>
+                <button type="button" id="suggSubmit" class="btn-submit" style="margin-top:12px">
+                    <span class="btn-submit-text">Aggiungi consiglio</span>
+                    <span class="btn-submit-icon">→</span>
+                </button>
+            </div>
+
+            
+            <div class="tab-bar" style="margin-top:20px" id="suggSortBar">
+                <button class="tab active" data-sugg-sort="rank">🏆 Classifica</button>
+                <button class="tab" data-sugg-sort="alpha">A → Z</button>
+            </div>
+
+            <div id="suggestedList" class="sugg-list">
+                <div class="state-loading"><span class="spinner"></span> Caricamento…</div>
+            </div>
+        </section>
+
+        
+        <section class="card" id="requestsCard">
+            <div class="card-header-row">
+                <div class="card-label">Richieste</div>
+                <span id="requestCount" class="pill">0</span>
+            </div>
+            <div class="tab-bar">
+                <button class="tab active" data-sort="date">In attesa</button>
+                <button class="tab" data-sort="evased">Evase ✓</button>
+            </div>
+            <div id="requestsList" class="requests-list">
+                <div class="state-loading">
+                    <span class="spinner"></span>
+                    Caricamento…
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    
+    <div id="catalogPopupOverlay" class="popup-overlay" style="display:none"></div>
+
+    
+    <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+    <script>
+
+        const EMAILJS_PUBLIC_KEY  = '_F118Bb19X2wLAKAJ';
+        const EMAILJS_SERVICE_ID  = 'service_dit5f7x';
+        const EMAILJS_TEMPLATE_ID = 'template_o43njnb';
+        const NOTIFY_EMAIL        = 'francesco.bagnato16@gmail.com';
+
+        if (EMAILJS_PUBLIC_KEY !== 'LA_TUA_PUBLIC_KEY') {
+            emailjs.init({ publicKey: EMAILJS_PUBLIC_KEY });
+        }
+
+        window.sendNewRequestEmail = function(title, type, requester, notes) {
+            if (EMAILJS_PUBLIC_KEY === 'LA_TUA_PUBLIC_KEY') return;
+            emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+                to_email:   NOTIFY_EMAIL,
+                title:      title,
+                type:       type,
+                requester:  requester,
+                notes:      notes || '—',
+                time:       new Date().toLocaleString('it-IT')
+            }).catch(err => console.warn('EmailJS error:', err));
+        };
+    </script>
+    <script type="module" src="script.js"></script>
+</body>
+</html>
