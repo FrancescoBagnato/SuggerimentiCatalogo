@@ -315,7 +315,7 @@ function renderRequests(list) {
     badge.textContent = list.length;
     const sorted = [...list].sort((a, b) => b.timestamp - a.timestamp);
     el.innerHTML = sorted.map(req => `
-        <div class="req-card">
+        <div class="req-card" data-id="${req.id}">
             <div class="req-top">
                 <span class="req-title">${esc(req.title)}</span>
                 ${requestTypeBadge(req)}
