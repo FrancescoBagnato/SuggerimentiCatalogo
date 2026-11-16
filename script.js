@@ -410,6 +410,10 @@ function updateRequestSeasonField() {
 requestTypeSelect?.addEventListener('change', updateRequestSeasonField);
 updateRequestSeasonField();
 
+// Nome richiedente: ?n= dal QR della TV > nickname ricordato
+document.getElementById('requester').value =
+    (new URLSearchParams(location.search).get('n') || '').trim().slice(0, 30) || getNickname().slice(0, 30);
+
 document.getElementById('requestForm').addEventListener('submit', async function(e) {
     e.preventDefault();
     const btn = this.querySelector('.btn-submit');
@@ -418,6 +422,7 @@ document.getElementById('requestForm').addEventListener('submit', async function
     const titleVal     = sanitize(document.getElementById('title').value, 120);
     const typeVal      = allowedValue(document.getElementById('type').value, ['Film', 'Serie TV']);
     const requesterVal = sanitize(document.getElementById('requester').value, 30);
+    saveNickname(requesterVal);
     const seasons = requestTypeSelect?.value === 'Serie TV'
         ? requestSeasonCheckboxes().filter(input => input.checked).map(input => Number(input.value)).sort((a, b) => a - b)
         : [];
