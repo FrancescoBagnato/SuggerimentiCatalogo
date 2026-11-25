@@ -29,7 +29,7 @@
     
     <header class="hero">
         <h1 class="hero-title">Cosa <em>vorresti vedere</em> dopo?</h1>
-        <p class="hero-sub">Invia una richiesta, suggerisci un titolo o vota quello degli altri.</p>
+        <p class="hero-sub">Invia una richiesta o consulta il catalogo.</p>
     </header>
 
     <main class="main">
@@ -140,49 +140,6 @@
                 <div id="watchlistContent" class="watchlist-content">
                     <div class="catalog-empty">Inserisci il tuo nickname e premi Aggiorna.</div>
                 </div>
-            </div>
-        </section>
-
-        
-        <section class="card" id="suggestedCard">
-            <div class="card-header-row">
-                <div class="card-label">Consigliati</div>
-                <span id="suggestedCount" class="pill">0</span>
-            </div>
-
-            
-            <div class="sugg-form" id="suggForm">
-                <div class="field-row">
-                    <div class="field">
-                        <label for="suggTitle">Titolo consigliato</label>
-                        <input type="text" id="suggTitle" placeholder="Breaking Bad" autocomplete="off" maxlength="120">
-                    </div>
-                    <div class="field field--sm">
-                        <label for="suggNick">Nickname</label>
-                        <input type="text" id="suggNick" placeholder="Lorem Ipsum" autocomplete="off" maxlength="30">
-                    </div>
-                </div>
-                <div class="field" style="margin-top:10px">
-                    <label>Il tuo voto <span class="label-opt">½ cliccando la metà sinistra</span></label>
-                    <div class="sugg-form-stars" id="suggFormStars">
-                        <span class="sugg-form-stars-hint">Tocca per votare</span>
-                    </div>
-                    <input type="hidden" id="suggFormRating" value="0">
-                </div>
-                <button type="button" id="suggSubmit" class="btn-submit" style="margin-top:12px">
-                    <span class="btn-submit-text">Aggiungi consiglio</span>
-                    <span class="btn-submit-icon">→</span>
-                </button>
-            </div>
-
-            
-            <div class="tab-bar" style="margin-top:20px" id="suggSortBar">
-                <button class="tab active" data-sugg-sort="rank">🏆 Classifica</button>
-                <button class="tab" data-sugg-sort="alpha">A → Z</button>
-            </div>
-
-            <div id="suggestedList" class="sugg-list">
-                <div class="state-loading"><span class="spinner"></span> Caricamento…</div>
             </div>
         </section>
 

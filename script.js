@@ -27,7 +27,6 @@ const db           = getDatabase(app);
 const requestsRef  = ref(db, 'requests');
 const evasedRef    = ref(db, 'evased');
 const catalogRef   = ref(db, 'catalog');
-const suggestedRef     = ref(db, 'suggested');
 const watchlistRef     = ref(db, 'watchlist');
 const catalogStructRef = ref(db, 'catalogStructure');
 const countersRef      = ref(db, 'counters');
@@ -36,14 +35,12 @@ const playtimeRef      = ref(db, 'playtime');
 
 let allRequests   = [];
 let allEvased     = [];
-let allSuggested  = [];
 let catalogData   = {};
 let currentTab      = 'date';
 let currentCatalogTab  = 'catalog';
 let recentItems        = [];
 let catalogStructure   = { serietv: [], film: [] };
 let watchlistData   = {};
-let currentSuggSort = 'rank';
 let isAdminMode     = false;
 
 function esc(text) {
@@ -85,11 +82,6 @@ function rateLimited(key, maxCount = 3, intervalMs = 60000) {
 function checkAdmin()  { return localStorage.getItem('isAdmin') === 'true'; }
 function getNickname() { return localStorage.getItem('catalogNick') || ''; }
 function saveNickname(n) { if (n) localStorage.setItem('catalogNick', n.trim()); }
-
-function getSuggRatings()          { return JSON.parse(localStorage.getItem('suggRatings') || '{}'); }
-function saveSuggRating(id, score) { const r = getSuggRatings(); r[id] = score; localStorage.setItem('suggRatings', JSON.stringify(r)); }
-function getSuggRating(id)         { return getSuggRatings()[id] || 0; }
-function hasSuggVoted(id)          { return !!getSuggRatings()[id]; }
 
 function showFormError(formId, msg) {
     const old = document.querySelector('#' + formId + ' .form-error');
@@ -157,7 +149,7 @@ async function enableAdmin() {
         if (inputHash === storedHash) {
             localStorage.setItem('isAdmin', 'true');
             isAdminMode = true;
-            renderAdminBtn(); redraw(); renderSuggested(allSuggested);
+            renderAdminBtn(); redraw();
             openAdminPanel();
         } else {
             alert('Password errata.');
@@ -169,7 +161,7 @@ function disableAdmin() {
     isAdminMode = false;
     const panel = document.getElementById('adminPanelOverlay');
     if (panel) panel.remove();
-    renderAdminBtn(); redraw(); renderSuggested(allSuggested);
+    renderAdminBtn(); redraw();
 }
 function renderAdminBtn() {
     const btn = document.getElementById('adminToggle');
@@ -840,461 +832,6 @@ onValue(catalogRef, snap => {
     document.querySelectorAll('.catalog-item:not(.catalog-folder)').forEach(li => updateCatalogItemUI(li));
 
     document.querySelectorAll('.catalog-folder').forEach(folder => updateFolderUI(folder));
-});
-
-onValue(suggestedRef, snap => {
-    const raw = snap.val();
-    allSuggested = raw ? Object.entries(raw).map(([id, val]) => ({ id, ...val })) : [];
-    renderSuggested(allSuggested);
-    if (window._apRenderSugg) window._apRenderSugg();
-});
-
-function openSuggVotersPopup(item) {
-    const ratings = item.ratings ? Object.entries(item.ratings) : [];
-    if (!ratings.length) return;
-
-    ratings.sort((a, b) => b[1] - a[1]);
-
-    const overlay = document.getElementById('catalogPopupOverlay');
-    overlay.innerHTML = `
-        <div class="popup-box">
-            <div class="popup-handle"></div>
-            <div class="popup-title">${esc(item.title)}</div>
-            <div class="popup-subtitle">Voti ricevuti — ${ratings.length} vot${ratings.length === 1 ? 'o' : 'i'}</div>
-            <div class="voters-list">
-                ${ratings.map(([nick, score]) => `
-                    <div class="voter-row">
-                        <div class="voter-avatar">${esc(nick[0].toUpperCase())}</div>
-                        <span class="voter-nick">${esc(nick)}</span>
-                        <span class="voter-score">${suggStarsHtml(score, 11)}</span>
-                        <span class="voter-num">${score}/10</span>
-                    </div>`).join('')}
-            </div>
-            <div class="popup-actions" style="margin-top:16px">
-                <button class="btn-popup-cancel" id="votersClose" style="flex:1">Chiudi</button>
-            </div>
-        </div>`;
-
-    overlay.style.display = 'flex';
-    overlay.classList.remove('closing');
-    addSwipeToClose(overlay);
-    overlay.querySelector('#votersClose').addEventListener('click', closePopup);
-    overlay.addEventListener('click', e => { if (e.target === overlay) closePopup(); });
-}
-
-function openSuggVotePopup(id, title) {
-    const overlay = document.getElementById('catalogPopupOverlay');
-    const pts = '12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26';
-    let selectedScore = 0;
-
-    overlay.innerHTML = `
-        <div class="popup-box">
-            <div class="popup-handle"></div>
-            <div class="popup-title">${esc(title)}</div>
-            <div class="popup-subtitle">Dai il tuo voto (1–10)</div>
-
-            <div class="popup-nick-row">
-                <div class="field" style="flex:1;gap:5px">
-                    <label style="font-size:12px">Nickname</label>
-                    <input type="text" id="svpNick" placeholder="Lorem Ipsum" value="${esc(getNickname())}" autocomplete="off" maxlength="20">
-                </div>
-            </div>
-
-            <div class="popup-stars-label">Il tuo voto <span style="font-size:10px;color:var(--low);font-weight:400;text-transform:none;letter-spacing:0">½ cliccando la metà sinistra</span></div>
-            <div class="popup-stars" id="svpStars">
-                ${Array.from({length:10}, (_, i) => {
-                    const val = i + 1;
-                    const uid = 'svp_' + Math.random().toString(36).slice(2,7);
-                    return '<button class="star-btn" data-val="' + val + '" title="' + val + '/10">'
-                        + '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">'
-                        + '<defs><clipPath id="' + uid + '"><rect x="0" y="0" width="12" height="24"/></clipPath></defs>'
-                        + '<polygon class="star-full" points="' + pts + '"/>'
-                        + '<polygon class="star-half" points="' + pts + '" clip-path="url(#' + uid + ')"/>'
-                        + '</svg></button>';
-                }).join('')}
-            </div>
-
-            <div class="popup-actions">
-                <button class="btn-popup-cancel" id="svpCancel">Annulla</button>
-                <button class="btn-popup-save" id="svpSave" disabled>Salva voto</button>
-            </div>
-        </div>`;
-
-    overlay.style.display = 'flex';
-    overlay.classList.remove('closing');
-    addSwipeToClose(overlay);
-
-    function applyStars(btns, val) {
-        btns.forEach(b => {
-            const v = parseFloat(b.dataset.val);
-            b.classList.remove('lit','half-lit');
-            if (val >= v)          b.classList.add('lit');
-            else if (val >= v-0.5) b.classList.add('half-lit');
-        });
-    }
-    const starBtns = Array.from(overlay.querySelectorAll('.star-btn'));
-    starBtns.forEach(btn => {
-        btn.addEventListener('click', e => {
-            const v = parseFloat(btn.dataset.val);
-            const half = (e.clientX - btn.getBoundingClientRect().left) < btn.getBoundingClientRect().width / 2;
-            selectedScore = half ? v - 0.5 : v;
-            applyStars(starBtns, selectedScore);
-            overlay.querySelector('#svpSave').disabled = false;
-        });
-        btn.addEventListener('mousemove', e => {
-            const v = parseFloat(btn.dataset.val);
-            const half = (e.clientX - btn.getBoundingClientRect().left) < btn.getBoundingClientRect().width / 2;
-            applyStars(starBtns, half ? v - 0.5 : v);
-        });
-        btn.addEventListener('mouseleave', () => applyStars(starBtns, selectedScore));
-    });
-
-    overlay.querySelector('#svpSave').addEventListener('click', async () => {
-        const nick = overlay.querySelector('#svpNick').value.trim();
-        if (!nick) { alert('Inserisci il tuo nickname.'); return; }
-        if (!selectedScore) { alert('Seleziona un voto.'); return; }
-        saveNickname(nick);
-        const saveBtn = overlay.querySelector('#svpSave');
-        saveBtn.disabled = true; saveBtn.textContent = 'Salvataggio…';
-        await voteSuggested(id, selectedScore);
-        closePopup();
-    });
-
-    overlay.querySelector('#svpCancel').addEventListener('click', closePopup);
-    overlay.addEventListener('click', e => { if (e.target === overlay) closePopup(); });
-}
-
-async function voteSuggested(id, score) {
-    const myNick = getNickname();
-    if (!myNick) { alert('Imposta prima il tuo Nickname!'); return; }
-    const item = allSuggested.find(s => s.id === id);
-    if (!item) return;
-    if (item.nick === myNick) { alert('Non puoi votare un tuo consiglio!'); return; }
-
-    try {
-        await set(ref(db, `suggested/${id}/ratings/${myNick}`), score);
-        saveSuggRating(id, score);
-    } catch (e) { alert('Errore: ' + e.message); }
-}
-
-function suggAvg(item) {
-    const ratings = item.ratings ? Object.values(item.ratings) : [];
-    if (!ratings.length) return null;
-    const avg = ratings.reduce((a, b) => a + b, 0) / ratings.length;
-
-    const rounded = Math.round(avg * 2) / 2;
-    return { avg: Math.round(avg * 10) / 10, rounded, count: ratings.length };
-}
-
-function suggStarsHtml(score, size = 11) {
-    if (!score) return '';
-    const pts = '12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26';
-    let s = '';
-    for (let i = 1; i <= 10; i++) {
-        if (score >= i) {
-
-            s += `<svg width="${size}" height="${size}" viewBox="0 0 24 24"><polygon points="${pts}" fill="#F5F4F1" stroke="#F5F4F1" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
-        } else if (score >= i - 0.5) {
-
-            const uid = 'sg' + i + Math.random().toString(36).slice(2,5);
-            s += `<svg width="${size}" height="${size}" viewBox="0 0 24 24">`
-               + `<defs><clipPath id="${uid}"><rect x="0" y="0" width="12" height="24"/></clipPath></defs>`
-               + `<polygon points="${pts}" fill="none" stroke="#6C6C72" stroke-width="1.5" stroke-linejoin="round"/>`
-               + `<polygon points="${pts}" fill="#F5F4F1" stroke="#F5F4F1" stroke-width="1.5" stroke-linejoin="round" clip-path="url(#${uid})"/>`
-               + `</svg>`;
-        } else {
-
-            s += `<svg width="${size}" height="${size}" viewBox="0 0 24 24"><polygon points="${pts}" fill="none" stroke="#6C6C72" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
-        }
-    }
-    return `<span style="display:inline-flex;align-items:center;gap:1px">${s}</span>`;
-}
-
-function renderSuggested(list) {
-    const el    = document.getElementById('suggestedList');
-    const badge = document.getElementById('suggestedCount');
-    if (!el) return;
-    badge.textContent = list.length;
-
-    if (!list.length) {
-        el.innerHTML = '<div class="sugg-empty">Nessun consiglio ancora.<br>Sii il primo!</div>';
-        return;
-    }
-
-    const myNick = getNickname();
-
-    if (currentSuggSort === 'rank') {
-
-        const withAvg = list.map(item => ({ ...item, _avg: suggAvg(item) }));
-        const sorted  = withAvg.sort((a, b) => {
-            const aAvg = a._avg ? a._avg.avg : -1;
-            const bAvg = b._avg ? b._avg.avg : -1;
-            return bAvg !== aAvg ? bAvg - aAvg : (a.timestamp || 0) - (b.timestamp || 0);
-        });
-        const medals     = ['🥇', '🥈', '🥉'];
-        const showMedals = sorted.length >= 1;
-
-        el.innerHTML = sorted.map((item, idx) => {
-            const rank     = idx + 1;
-            const isTop    = showMedals && rank <= 3;
-            const medal    = isTop ? medals[idx] : '';
-            const isOwn    = myNick && item.nick === myNick;
-
-            const myScore  = getSuggRating(item.id) || (myNick && item.ratings && item.ratings[myNick]) || 0;
-            const voted    = myScore > 0;
-
-            if (myNick && item.ratings && item.ratings[myNick] && !getSuggRating(item.id)) {
-                saveSuggRating(item.id, item.ratings[myNick]);
-            }
-            const avgData  = item._avg;
-
-            return `
-                <div class="sugg-item ${isTop ? 'sugg-top sugg-top-' + rank : ''}">
-                    <div class="sugg-item-top">
-                        ${medal ? `<span class="sugg-medal">${medal}</span>` : `<span class="sugg-rank">${rank}</span>`}
-                        <div class="sugg-title-wrap">
-                            <span class="sugg-title">${esc(item.title)}</span>
-                            <span class="sugg-by">${esc(item.nick)}</span>
-                        </div>
-                        ${(isAdminMode || item.nick === myNick) ? `<button class="sugg-delete" data-id="${item.id}" title="Rimuovi">✕</button>` : ''}
-                    </div>
-                    <div class="sugg-item-bottom">
-                        <div class="sugg-avg-wrap">
-                            ${avgData
-                                ? `<span class="sugg-avg">${suggStarsHtml(avgData.rounded, 11)} <span class="sugg-avg-num">${avgData.avg.toFixed(1)}/10</span> <button class="sugg-votes-btn" data-id="${item.id}" title="Vedi chi ha votato">(${avgData.count} vot${avgData.count === 1 ? 'o' : 'i'})</button></span>`
-                                : `<span class="sugg-avg sugg-avg-none">nessun voto ancora</span>`}
-                        </div>
-                        <div class="sugg-score-wrap">
-                            ${isOwn && !voted
-                                ? `<span class="sugg-own-badge">tuo</span>`
-                                : voted
-                                    ? `<span class="sugg-voted-score"><span style="font-size:11px;color:var(--teal-light)">Voto: ${myScore}/10</span></span>`
-                                    : isOwn
-                                        ? `<span class="sugg-own-badge">tuo</span>`
-                                        : `<button class="btn-sugg-vote-open" data-id="${item.id}" data-title="${esc(item.title)}" data-nick="${esc(item.nick)}">Vota</button>`
-                            }
-                        </div>
-                    </div>
-                </div>`;
-        }).join('');
-
-    } else if (currentSuggSort === 'alpha') {
-        const sorted = [...list].sort((a, b) => a.title.localeCompare(b.title, 'it'));
-        el.innerHTML = sorted.map(item => `
-            <div class="sugg-item">
-                <div class="sugg-info">
-                    <span class="sugg-title">${esc(item.title)}</span>
-                    <span class="sugg-by">${esc(item.nick)}</span>
-                </div>
-                ${(isAdminMode || item.nick === myNick) ? `<button class="sugg-delete" data-id="${item.id}" title="Rimuovi">✕</button>` : ''}
-            </div>`).join('');
-
-    }
-
-    el.querySelectorAll('.sugg-votes-btn').forEach(btn => {
-        btn.addEventListener('click', e => {
-            e.stopPropagation();
-            const item = allSuggested.find(s => s.id === btn.dataset.id);
-            if (!item) return;
-            openSuggVotersPopup(item);
-        });
-    });
-
-    el.querySelectorAll('.btn-sugg-vote-open').forEach(btn => {
-        btn.addEventListener('click', () => openSuggVotePopup(btn.dataset.id, btn.dataset.title));
-    });
-
-    el.querySelectorAll('.sugg-stars-input').forEach(wrap => {
-        const id   = wrap.dataset.id;
-        const btns = Array.from(wrap.querySelectorAll('.ssb'));
-        const pts  = '12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26';
-
-        function renderPreview(hoverScore) {
-            btns.forEach((b, i) => {
-                const v = i + 1;
-                if (hoverScore >= v) {
-                    b.innerHTML = `<svg width="17" height="17" viewBox="0 0 24 24"><polygon points="${pts}" fill="#F5F4F1" stroke="#F5F4F1" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
-                } else if (hoverScore >= v - 0.5) {
-                    const uid = 'ph' + i;
-                    b.innerHTML = `<svg width="17" height="17" viewBox="0 0 24 24">`
-                        + `<defs><clipPath id="${uid}"><rect x="0" y="0" width="12" height="24"/></clipPath></defs>`
-                        + `<polygon points="${pts}" fill="none" stroke="#6C6C72" stroke-width="1.5" stroke-linejoin="round"/>`
-                        + `<polygon points="${pts}" fill="#F5F4F1" stroke="#F5F4F1" stroke-width="1.5" stroke-linejoin="round" clip-path="url(#${uid})"/>`
-                        + `</svg>`;
-                } else {
-                    b.innerHTML = `<svg width="17" height="17" viewBox="0 0 24 24"><polygon points="${pts}" fill="none" stroke="#6C6C72" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
-                }
-            });
-        }
-
-        function resetStars() {
-            btns.forEach(b => { b.innerHTML = '★'; b.style.color = '#6C6C72'; });
-        }
-
-        resetStars();
-
-        btns.forEach((btn, i) => {
-            btn.addEventListener('mousemove', e => {
-                const rect = btn.getBoundingClientRect();
-                const half = (e.clientX - rect.left) < rect.width / 2;
-                const score = half ? i + 0.5 : i + 1;
-                renderPreview(score);
-                btn.dataset.currentScore = score;
-            });
-            btn.addEventListener('mouseleave', () => {
-                resetStars();
-                delete btn.dataset.currentScore;
-            });
-            btn.addEventListener('click', e => {
-                const rect  = btn.getBoundingClientRect();
-                const half  = (e.clientX - rect.left) < rect.width / 2;
-                const score = half ? i + 0.5 : i + 1;
-                voteSuggested(id, score);
-            });
-        });
-
-        wrap.addEventListener('mouseleave', resetStars);
-    });
-
-    el.querySelectorAll('.sugg-delete').forEach(btn => {
-        btn.addEventListener('click', async () => {
-            if (!confirm('Rimuovere questo consiglio?')) return;
-            try { await remove(ref(db, 'suggested/' + btn.dataset.id)); }
-            catch (e) { alert('Errore: ' + e.message); }
-        });
-    });
-}
-
-function initSuggFormStars() {
-    const wrap        = document.getElementById('suggFormStars');
-    const ratingInput = document.getElementById('suggFormRating');
-    if (!wrap) return;
-
-    const pts = '12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26';
-    let currentRating = 0;
-    let hoverRating   = 0;
-
-    wrap.innerHTML = '';
-    const starBtns = Array.from({length: 10}, (_, i) => {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.dataset.idx = i;
-        btn.style.cssText = 'background:none;border:none;cursor:pointer;padding:1px;line-height:1';
-        wrap.appendChild(btn);
-        return btn;
-    });
-    const label = document.createElement('span');
-    label.style.cssText = 'font-size:13px;color:#A4A4AA;font-weight:600;margin-left:6px;display:none';
-    wrap.appendChild(label);
-    const clearBtn = document.createElement('button');
-    clearBtn.type = 'button';
-    clearBtn.textContent = '✕';
-    clearBtn.style.cssText = 'background:none;border:none;cursor:pointer;font-size:12px;color:#6C6C72;margin-left:4px;display:none';
-    wrap.appendChild(clearBtn);
-
-    function starSVG(type) {
-        const uid = 'sfs_' + Math.random().toString(36).slice(2,7);
-        if (type === 'full')
-            return `<svg width="18" height="18" viewBox="0 0 24 24"><polygon points="${pts}" fill="#F5F4F1" stroke="#F5F4F1" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
-        if (type === 'half')
-            return `<svg width="18" height="18" viewBox="0 0 24 24"><defs><clipPath id="${uid}"><rect x="0" y="0" width="12" height="24"/></clipPath></defs><polygon points="${pts}" fill="none" stroke="#6C6C72" stroke-width="1.5" stroke-linejoin="round"/><polygon points="${pts}" fill="#F5F4F1" stroke="#F5F4F1" stroke-width="1.5" stroke-linejoin="round" clip-path="url(#${uid})"/></svg>`;
-        return `<svg width="18" height="18" viewBox="0 0 24 24"><polygon points="${pts}" fill="none" stroke="#6C6C72" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
-    }
-
-    function refreshStars(active) {
-        starBtns.forEach((btn, i) => {
-            const v = i + 1;
-            if (active >= v)          btn.innerHTML = starSVG('full');
-            else if (active >= v-0.5) btn.innerHTML = starSVG('half');
-            else                      btn.innerHTML = starSVG('empty');
-        });
-        if (active > 0) {
-            label.textContent = active.toFixed(1) + '/10';
-            label.style.display = '';
-            clearBtn.style.display = '';
-        } else {
-            label.style.display = 'none';
-            clearBtn.style.display = 'none';
-        }
-    }
-
-    refreshStars(0);
-
-    starBtns.forEach((btn, i) => {
-        btn.addEventListener('mousemove', e => {
-            const rect = btn.getBoundingClientRect();
-            hoverRating = (e.clientX - rect.left) < rect.width / 2 ? i + 0.5 : i + 1;
-            refreshStars(hoverRating);
-        });
-        btn.addEventListener('mouseleave', () => {
-            hoverRating = 0;
-            refreshStars(currentRating);
-        });
-        btn.addEventListener('click', e => {
-            const rect = btn.getBoundingClientRect();
-            currentRating = (e.clientX - rect.left) < rect.width / 2 ? i + 0.5 : i + 1;
-            if (ratingInput) ratingInput.value = currentRating;
-            refreshStars(currentRating);
-        });
-    });
-
-    clearBtn.addEventListener('click', () => {
-        currentRating = 0;
-        if (ratingInput) ratingInput.value = 0;
-        refreshStars(0);
-    });
-}
-
-document.getElementById('suggSubmit').addEventListener('click', async () => {
-    const titleEl  = document.getElementById('suggTitle');
-    const nickEl   = document.getElementById('suggNick');
-    const ratingEl = document.getElementById('suggFormRating');
-    const title    = sanitize(titleEl.value, 120);
-    const nick     = sanitize(nickEl.value, 30);
-    const rating   = Math.min(10, Math.max(0, parseFloat(ratingEl?.value || 0) || 0));
-
-    let suggError = '';
-    if (!title)  suggError = 'Inserisci il titolo del consiglio.';
-    else if (!nick)   suggError = 'Inserisci il tuo nickname.';
-    else if (!rating) suggError = 'Inserisci il tuo voto (1–10).';
-    if (suggError) {
-        showFormError('suggForm', suggError);
-        return;
-    }
-    if (rateLimited('suggest', 10, 60000)) {
-        showFormError('suggForm', 'Troppi invii. Aspetta un minuto.');
-        return;
-    }
-    saveNickname(nick);
-    const btn = document.getElementById('suggSubmit');
-    btn.disabled = true;
-    btn.querySelector('.btn-submit-text').textContent = 'Invio…';
-    try {
-        const payload = { title, nick, votes: 0, timestamp: Date.now() };
-
-        if (rating > 0) {
-            if (!payload.ratings) payload.ratings = {};
-            payload.ratings[nick] = rating;
-        }
-        await push(suggestedRef, payload);
-        titleEl.value = '';
-
-        if (ratingEl) ratingEl.value = 0;
-        initSuggFormStars();
-    } catch (e) { alert('Errore: ' + e.message); }
-    finally {
-        btn.disabled = false;
-        btn.querySelector('.btn-submit-text').textContent = 'Aggiungi consiglio';
-    }
-});
-
-document.querySelectorAll('[data-sugg-sort]').forEach(tab => {
-    tab.addEventListener('click', function () {
-        document.querySelectorAll('[data-sugg-sort]').forEach(t => t.classList.remove('active'));
-        this.classList.add('active');
-        currentSuggSort = this.dataset.suggSort;
-        renderSuggested(allSuggested);
-    });
 });
 
 function catalogChildren(node) {
@@ -2388,9 +1925,6 @@ initCatalog();
 
 const savedNick = getNickname();
 if (savedNick) {
-    const sn = document.getElementById('suggNick');
-    if (sn) sn.value = savedNick;
     loadWatchlist(savedNick);
 }
 
-initSuggFormStars();
