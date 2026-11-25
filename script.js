@@ -118,13 +118,13 @@ function starSvgInline(type, sz) {
     const pts  = '12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26';
     const base = `<svg width="${sz}" height="${sz}" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">`;
     if (type === 'full')
-        return base + `<polygon points="${pts}" fill="#fbbf24" stroke="#fbbf24" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
+        return base + `<polygon points="${pts}" fill="#F5F4F1" stroke="#F5F4F1" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
     if (type === 'empty')
-        return base + `<polygon points="${pts}" fill="none" stroke="#64748b" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
+        return base + `<polygon points="${pts}" fill="none" stroke="#6C6C72" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
     return base
         + `<defs><clipPath id="${uid}"><rect x="0" y="0" width="12" height="24"/></clipPath></defs>`
-        + `<polygon points="${pts}" fill="none" stroke="#64748b" stroke-width="1.5" stroke-linejoin="round"/>`
-        + `<polygon points="${pts}" fill="#fbbf24" stroke="#fbbf24" stroke-width="1.5" stroke-linejoin="round" clip-path="url(#${uid})"/>`
+        + `<polygon points="${pts}" fill="none" stroke="#6C6C72" stroke-width="1.5" stroke-linejoin="round"/>`
+        + `<polygon points="${pts}" fill="#F5F4F1" stroke="#F5F4F1" stroke-width="1.5" stroke-linejoin="round" clip-path="url(#${uid})"/>`
         + `</svg>`;
 }
 
@@ -136,7 +136,7 @@ function starsHtml(rating, size = 12) {
         else if (rating >= i - 0.5) s += starSvgInline('half', size);
         else                        s += starSvgInline('empty', size);
     }
-    return `<span style="display:inline-flex;align-items:center;gap:1px;vertical-align:middle">${s}<span style="margin-left:4px;font-size:${size}px;color:#cbd5e1;font-weight:600">${rating.toFixed(1)}</span></span>`;
+    return `<span style="display:inline-flex;align-items:center;gap:1px;vertical-align:middle">${s}<span style="margin-left:4px;font-size:${size}px;color:#A4A4AA;font-weight:600">${rating.toFixed(1)}</span></span>`;
 }
 
 function avgRating(users) {
@@ -993,18 +993,18 @@ function suggStarsHtml(score, size = 11) {
     for (let i = 1; i <= 10; i++) {
         if (score >= i) {
 
-            s += `<svg width="${size}" height="${size}" viewBox="0 0 24 24"><polygon points="${pts}" fill="#fbbf24" stroke="#fbbf24" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
+            s += `<svg width="${size}" height="${size}" viewBox="0 0 24 24"><polygon points="${pts}" fill="#F5F4F1" stroke="#F5F4F1" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
         } else if (score >= i - 0.5) {
 
             const uid = 'sg' + i + Math.random().toString(36).slice(2,5);
             s += `<svg width="${size}" height="${size}" viewBox="0 0 24 24">`
                + `<defs><clipPath id="${uid}"><rect x="0" y="0" width="12" height="24"/></clipPath></defs>`
-               + `<polygon points="${pts}" fill="none" stroke="#475569" stroke-width="1.5" stroke-linejoin="round"/>`
-               + `<polygon points="${pts}" fill="#fbbf24" stroke="#fbbf24" stroke-width="1.5" stroke-linejoin="round" clip-path="url(#${uid})"/>`
+               + `<polygon points="${pts}" fill="none" stroke="#6C6C72" stroke-width="1.5" stroke-linejoin="round"/>`
+               + `<polygon points="${pts}" fill="#F5F4F1" stroke="#F5F4F1" stroke-width="1.5" stroke-linejoin="round" clip-path="url(#${uid})"/>`
                + `</svg>`;
         } else {
 
-            s += `<svg width="${size}" height="${size}" viewBox="0 0 24 24"><polygon points="${pts}" fill="none" stroke="#475569" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
+            s += `<svg width="${size}" height="${size}" viewBox="0 0 24 24"><polygon points="${pts}" fill="none" stroke="#6C6C72" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
         }
     }
     return `<span style="display:inline-flex;align-items:center;gap:1px">${s}</span>`;
@@ -1113,22 +1113,22 @@ function renderSuggested(list) {
             btns.forEach((b, i) => {
                 const v = i + 1;
                 if (hoverScore >= v) {
-                    b.innerHTML = `<svg width="17" height="17" viewBox="0 0 24 24"><polygon points="${pts}" fill="#fbbf24" stroke="#fbbf24" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
+                    b.innerHTML = `<svg width="17" height="17" viewBox="0 0 24 24"><polygon points="${pts}" fill="#F5F4F1" stroke="#F5F4F1" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
                 } else if (hoverScore >= v - 0.5) {
                     const uid = 'ph' + i;
                     b.innerHTML = `<svg width="17" height="17" viewBox="0 0 24 24">`
                         + `<defs><clipPath id="${uid}"><rect x="0" y="0" width="12" height="24"/></clipPath></defs>`
-                        + `<polygon points="${pts}" fill="none" stroke="#475569" stroke-width="1.5" stroke-linejoin="round"/>`
-                        + `<polygon points="${pts}" fill="#fbbf24" stroke="#fbbf24" stroke-width="1.5" stroke-linejoin="round" clip-path="url(#${uid})"/>`
+                        + `<polygon points="${pts}" fill="none" stroke="#6C6C72" stroke-width="1.5" stroke-linejoin="round"/>`
+                        + `<polygon points="${pts}" fill="#F5F4F1" stroke="#F5F4F1" stroke-width="1.5" stroke-linejoin="round" clip-path="url(#${uid})"/>`
                         + `</svg>`;
                 } else {
-                    b.innerHTML = `<svg width="17" height="17" viewBox="0 0 24 24"><polygon points="${pts}" fill="none" stroke="#475569" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
+                    b.innerHTML = `<svg width="17" height="17" viewBox="0 0 24 24"><polygon points="${pts}" fill="none" stroke="#6C6C72" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
                 }
             });
         }
 
         function resetStars() {
-            btns.forEach(b => { b.innerHTML = '★'; b.style.color = '#475569'; });
+            btns.forEach(b => { b.innerHTML = '★'; b.style.color = '#6C6C72'; });
         }
 
         resetStars();
@@ -1184,21 +1184,21 @@ function initSuggFormStars() {
         return btn;
     });
     const label = document.createElement('span');
-    label.style.cssText = 'font-size:13px;color:#cbd5e1;font-weight:600;margin-left:6px;display:none';
+    label.style.cssText = 'font-size:13px;color:#A4A4AA;font-weight:600;margin-left:6px;display:none';
     wrap.appendChild(label);
     const clearBtn = document.createElement('button');
     clearBtn.type = 'button';
     clearBtn.textContent = '✕';
-    clearBtn.style.cssText = 'background:none;border:none;cursor:pointer;font-size:12px;color:#64748b;margin-left:4px;display:none';
+    clearBtn.style.cssText = 'background:none;border:none;cursor:pointer;font-size:12px;color:#6C6C72;margin-left:4px;display:none';
     wrap.appendChild(clearBtn);
 
     function starSVG(type) {
         const uid = 'sfs_' + Math.random().toString(36).slice(2,7);
         if (type === 'full')
-            return `<svg width="18" height="18" viewBox="0 0 24 24"><polygon points="${pts}" fill="#fbbf24" stroke="#fbbf24" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
+            return `<svg width="18" height="18" viewBox="0 0 24 24"><polygon points="${pts}" fill="#F5F4F1" stroke="#F5F4F1" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
         if (type === 'half')
-            return `<svg width="18" height="18" viewBox="0 0 24 24"><defs><clipPath id="${uid}"><rect x="0" y="0" width="12" height="24"/></clipPath></defs><polygon points="${pts}" fill="none" stroke="#64748b" stroke-width="1.5" stroke-linejoin="round"/><polygon points="${pts}" fill="#fbbf24" stroke="#fbbf24" stroke-width="1.5" stroke-linejoin="round" clip-path="url(#${uid})"/></svg>`;
-        return `<svg width="18" height="18" viewBox="0 0 24 24"><polygon points="${pts}" fill="none" stroke="#64748b" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
+            return `<svg width="18" height="18" viewBox="0 0 24 24"><defs><clipPath id="${uid}"><rect x="0" y="0" width="12" height="24"/></clipPath></defs><polygon points="${pts}" fill="none" stroke="#6C6C72" stroke-width="1.5" stroke-linejoin="round"/><polygon points="${pts}" fill="#F5F4F1" stroke="#F5F4F1" stroke-width="1.5" stroke-linejoin="round" clip-path="url(#${uid})"/></svg>`;
+        return `<svg width="18" height="18" viewBox="0 0 24 24"><polygon points="${pts}" fill="none" stroke="#6C6C72" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
     }
 
     function refreshStars(active) {
