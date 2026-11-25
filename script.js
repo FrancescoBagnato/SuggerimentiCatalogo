@@ -1120,7 +1120,6 @@ function openAdminPanel() {
             <div class="admin-tabs">
                 <button class="admin-tab active" data-panel="richieste">📋 Richieste</button>
                 <button class="admin-tab" data-panel="evase">✅ Evase</button>
-                <button class="admin-tab" data-panel="consigliati">💡 Consigliati</button>
                 <button class="admin-tab" data-panel="catalogo">🗂️ Catalogo</button>
                 <button class="admin-tab" data-panel="contatori">🔢 Contatori</button>
                 <button class="admin-tab" data-panel="novita">Aggiunti di recente</button>
@@ -1138,11 +1137,6 @@ function openAdminPanel() {
                 <div id="ap-ev-list" class="ap-list"></div>
             </div>
 
-            <!-- CONSIGLIATI -->
-            <div class="admin-section" id="ap-consigliati">
-                <p class="admin-hint">Puoi eliminare qualsiasi consiglio.</p>
-                <div id="ap-sugg-list" class="ap-list"></div>
-            </div>
 
             <!-- NOVITÀ -->
             <div class="admin-section" id="ap-novita">
@@ -1308,29 +1302,6 @@ function openAdminPanel() {
         });
     }
 
-    function renderApSugg() {
-        const el = overlay.querySelector('#ap-sugg-list');
-        if (!allSuggested.length) { el.innerHTML = '<div class="ap-empty">Nessun consiglio.</div>'; return; }
-        const sorted = [...allSuggested].sort((a, b) => a.title.localeCompare(b.title, 'it'));
-        el.innerHTML = sorted.map(s => `
-            <div class="ap-item">
-                <div class="ap-item-info">
-                    <span class="ap-item-title">${esc(s.title)}</span>
-                    <span class="ap-item-meta">di ${esc(s.nick)}</span>
-                </div>
-                <div class="ap-item-actions">
-                    <button class="ap-btn ap-btn-del" data-id="${s.id}" data-title="${esc(s.title)}">✕</button>
-                </div>
-            </div>`).join('');
-        el.querySelectorAll('.ap-btn-del').forEach(btn => {
-            btn.addEventListener('click', async () => {
-                if (!confirm(`Eliminare il consiglio "${btn.dataset.title}"?`)) return;
-                try { await remove(ref(db, 'suggested/' + btn.dataset.id)); renderApSugg(); }
-                catch(e) { alert('Errore: ' + e.message); }
-            });
-        });
-    }
-
     function getFilteredItems(filterCat, searchQ) {
         let items = [];
         if (!filterCat || filterCat === 'cat-serietv') {
@@ -1468,7 +1439,6 @@ function openAdminPanel() {
 
     renderApRequests();
     renderApEvased();
-    renderApSugg();
     renderApCatalog();
     renderApRecent();
 
@@ -1610,7 +1580,6 @@ function openAdminPanel() {
 
     window._apRenderReq  = renderApRequests;
     window._apRenderEv   = renderApEvased;
-    window._apRenderSugg = renderApSugg;
 }
 
 onValue(countersRef, snap => {
